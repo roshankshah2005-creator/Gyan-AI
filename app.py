@@ -32,8 +32,8 @@ if not api_key:
     st.error("API Key not configured properly on the server.")
     st.stop()
 
-# EXPLICITLY pass api_key here so the client doesn't look for OAuth tokens
-client = genai.Client(api_key=api_key)
+# Force standard Gemini Developer API mode instead of Vertex AI OAuth
+client = genai.Client(api_key=api_key, vertexai=False)
 
 # -------------------------------------------------------------------------
 # 3. SIDEBAR CONFIGURATION & PERSONAS

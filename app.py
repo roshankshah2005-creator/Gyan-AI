@@ -18,7 +18,6 @@ st.set_page_config(
 # -------------------------------------------------------------------------
 # 2. API KEY VALIDATION & CLIENT INITIALIZATION
 # -------------------------------------------------------------------------
-# Securely fetch API key from Streamlit secrets or environment variables
 api_key = None
 try:
     if "GEMINI_API_KEY" in st.secrets:
@@ -33,7 +32,7 @@ if not api_key:
     st.error("API Key not configured properly on the server.")
     st.stop()
 
-# Initialize the official Google GenAI client
+# EXPLICITLY pass api_key here so the client doesn't look for OAuth tokens
 client = genai.Client(api_key=api_key)
 
 # -------------------------------------------------------------------------

@@ -1,8 +1,7 @@
 import os
 import time
 import streamlit as st
-from google import genai
-from google.genai import types
+import google.generativeai as genai
 from pypdf import PdfReader
 
 # -------------------------------------------------------------------------
@@ -32,12 +31,8 @@ if not api_key:
     st.error("API Key not configured properly on the server.")
     st.stop()
 
-# Force-clear any environment variables that might trick the SDK into Vertex AI mode
-if "GOOGLE_GENAI_USE_VERTEXAI" in os.environ:
-    del os.environ["GOOGLE_GENAI_USE_VERTEXAI"]
-
-# Initialize client cleanly using the Google AI Studio developer API key
-client = genai.Client(api_key=api_key)
+# Configure the classic Google GenAI library directly
+genai.configure(api_key=api_key)
 
 # -------------------------------------------------------------------------
 # 3. SIDEBAR CONFIGURATION & PERSONAS
@@ -90,11 +85,6 @@ with st.sidebar:
         st.session_state.messages = []
         st.rerun()
 
-    st.markdown("")
-    if st.button("💬 New Chat", use_container_width=True):
-        st.session_state.messages = []
-        st.rerun()
-
 # -------------------------------------------------------------------------
 # 4. CHAT INTERFACE & STATE MANAGEMENT
 # -------------------------------------------------------------------------
@@ -112,31 +102,34 @@ if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc...
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    contents = []
+    # Build history context
+    history_chat = []
+    for msg in st.session_state.messages[:-1]:
+        role = "user" if msg["role"] == "user" else "model"
+        history_chat.append({"role": role, "parts": [msg["content"]]})
+
+    # Add document RAG context if uploaded
+    full_prompt = prompt
     if document_text:
-        contents.append(f"Context from uploaded document:\n{document_text}\n\n")
-    
-    for msg in st.session_state.messages:
-        contents.append(f"{msg['role'].capitalize()}: {msg['content']}")
+        full_prompt = f"Context from uploaded document:\n{document_text}\n\nUser Question: {prompt}"
 
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
         message_placeholder.markdown("Thinking...")
         
-        max_retries = 3
         response_text = None
+        max_retries = 3
         
         for attempt in range(max_retries):
             try:
-                response = client.models.generate_content(
-                    model='gemini-3.6-flash',
-                    contents=contents,
-                    config=types.GenerateContentConfig(
-                        system_instruction=active_system_instruction,
-                        temperature=0.7,
-                        thinking_config=types.ThinkingConfig(thinking_level="HIGH")
-                    )
+                # Initialize model with system instruction
+                model = genai.GenerativeModel(
+                    model_name='gemini-3.6-flash',
+                    system_instruction=active_system_instruction
                 )
+                
+                chat = model.start_chat(history=history_chat)
+                response = chat.send_message(full_prompt)
                 response_text = response.text
                 break
             except Exception as e:

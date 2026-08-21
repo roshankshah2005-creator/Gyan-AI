@@ -32,8 +32,12 @@ if not api_key:
     st.error("API Key not configured properly on the server.")
     st.stop()
 
-# Force standard Google AI Studio mode and pass the key explicitly to avoid 401 errors
-client = genai.Client(api_key=api_key, vertexai=False)
+# Force-clear any environment variables that might trick the SDK into Vertex AI mode
+if "GOOGLE_GENAI_USE_VERTEXAI" in os.environ:
+    del os.environ["GOOGLE_GENAI_USE_VERTEXAI"]
+
+# Initialize client cleanly using the Google AI Studio developer API key
+client = genai.Client(api_key=api_key)
 
 # -------------------------------------------------------------------------
 # 3. SIDEBAR CONFIGURATION & PERSONAS

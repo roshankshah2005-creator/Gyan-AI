@@ -32,7 +32,7 @@ if not api_key:
     st.error("API Key not configured properly on the server.")
     st.stop()
 
-# Force standard Gemini Developer API mode instead of Vertex AI OAuth
+# Force standard Google AI Studio mode and pass the key explicitly to avoid 401 errors
 client = genai.Client(api_key=api_key, vertexai=False)
 
 # -------------------------------------------------------------------------
@@ -51,7 +51,6 @@ with st.sidebar:
         label_visibility="collapsed"
     )
     
-    # Define system instructions based on persona
     system_instructions = {
         "Senior Tech Lead": "You are an expert Senior Tech Lead. Provide clean, efficient code snippets, rigorous code reviews, and robust software architecture guidance.",
         "Data Science Mentor": "You are a Data Science Mentor. Help with machine learning algorithms, pandas dataframes, scikit-learn pipelines, statistics, and data cleaning workflows.",
@@ -66,7 +65,6 @@ with st.sidebar:
     uploaded_file = st.file_uploader("Upload PDF or TXT", type=["pdf", "txt"], label_visibility="collapsed")
     st.caption("200MB per file • PDF, TXT")
 
-    # Extract text from uploaded document if present
     document_text = ""
     if uploaded_file is not None:
         try:
@@ -101,28 +99,22 @@ st.markdown("<h1 style='text-align: center; color: #a29bfe;'>GYAN</h1>", unsafe_
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display chat history
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# User input box
 if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc..."):
-    # Append user message
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Prepare context including document RAG if available
     contents = []
     if document_text:
         contents.append(f"Context from uploaded document:\n{document_text}\n\n")
     
-    # Add conversation history context
     for msg in st.session_state.messages:
         contents.append(f"{msg['role'].capitalize()}: {msg['content']}")
 
-    # Generate AI response with retry logic and 3.6-flash model
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
         message_placeholder.markdown("Thinking...")
@@ -133,7 +125,7 @@ if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc...
         for attempt in range(max_retries):
             try:
                 response = client.models.generate_content(
-                    model='gemini-3.6-flash',  # Locked to version 3.6
+                    model='gemini-3.6-flash',
                     contents=contents,
                     config=types.GenerateContentConfig(
                         system_instruction=active_system_instruction,
@@ -144,11 +136,11 @@ if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc...
                 response_text = response.text
                 break
             except Exception as e:
-                if "503" in str(e) and attempt < max_retries - 1:
-                    time.sleep(1.5)  # Brief pause before retrying
+                if ("503" in str(e) or "429" in str(e)) and attempt < max_retries - 1:
+                    time.sleep(1.5)
                     continue
                 else:
-                    response_text = f"Server is busy handling high traffic (503). Gyan automatically tried to reconnect—please send your message again in a moment! (Error details: {e})"
+                    response_text = f"An error occurred. Details: {e}"
         
         message_placeholder.markdown(response_text)
         st.session_state.messages.append({"role": "assistant", "content": response_text})

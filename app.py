@@ -273,7 +273,7 @@ if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc...
             for attempt in range(3):
                 try:
                     response = client.models.generate_content(
-                        model='gemini-3.7-flash',
+                        model='gemini-3.6-flash',
                         contents=contents,
                         config=types.GenerateContentConfig(
                             system_instruction=active_system_instruction,

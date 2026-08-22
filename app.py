@@ -16,35 +16,36 @@ st.set_page_config(
 )
 
 # -------------------------------------------------------------------------
-# 2. AUTOMATED API KEY & CLIENT INITIALIZATION (Modern SDK for API keys)
+# 2. AUTOMATED API KEY & CLIENT INITIALIZATION (Vertex AI Mode for AQ Keys)
 # -------------------------------------------------------------------------
-# Purge conflicting cloud background variables that force ADC/OAuth mode
-for gcp_var in [
-    "GOOGLE_APPLICATION_CREDENTIALS",
-    "GOOGLE_CLOUD_PROJECT",
-    "GOOGLE_CLOUD_REGION",
-    "GOOGLE_GENAI_USE_VERTEXAI",
-]:
-    if gcp_var in os.environ:
-        del os.environ[gcp_var]
-
 api_key = None
+gcp_project = None
+
 try:
     if "GEMINI_API_KEY" in st.secrets:
         api_key = str(st.secrets["GEMINI_API_KEY"]).strip()
+    if "GOOGLE_CLOUD_PROJECT" in st.secrets:
+        gcp_project = str(st.secrets["GOOGLE_CLOUD_PROJECT"]).strip()
 except Exception:
     pass
 
 if not api_key:
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
+if not gcp_project:
+    gcp_project = os.getenv("GOOGLE_CLOUD_PROJECT", "").strip()
 
-if not api_key:
-    st.error("⚠️ GEMINI_API_KEY is missing. Please configure it in your Streamlit Secrets.")
+if not api_key or not gcp_project:
+    st.error("⚠️ GEMINI_API_KEY and GOOGLE_CLOUD_PROJECT must both be configured in your Streamlit Secrets.")
     st.stop()
 
-# Initialize the client, explicitly forcing API-key mode (not Vertex/OAuth)
+# Initialize client using Vertex AI backend to properly handle AQ. keys
 try:
-    client = genai.Client(api_key=api_key, vertexai=False)
+    client = genai.Client(
+        vertexai=True,
+        project=gcp_project,
+        location="us-central1", # Change to your Google Cloud region if needed
+        api_key=api_key
+    )
 except Exception as e:
     st.error(f"Failed to initialize Gemini client: {e}")
     st.stop()

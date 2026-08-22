@@ -158,7 +158,7 @@ with st.sidebar:
     active_system_instruction = system_instructions.get(persona_choice, "You are Gyan, a helpful AI assistant.")
 
 # -------------------------------------------------------------------------
-# 6. MAIN CHAT INTERFACE & SAFE DOCUMENT UPLOAD
+# 6. MAIN CHAT INTERFACE & INSTANT UPLOAD
 # -------------------------------------------------------------------------
 st.markdown("<h1 style='text-align: center; color: #a29bfe;'>GYAN</h1>", unsafe_allow_html=True)
 
@@ -168,7 +168,7 @@ for message in active_chat["messages"]:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Safe Upload Expander
+# Fast Document Upload Expander
 with st.expander("➕ Add Document Resource"):
     uploaded_file = st.file_uploader("Upload PDF or TXT", type=["pdf", "txt"], key="taskbar_uploader")
     if uploaded_file is not None:
@@ -186,10 +186,10 @@ with st.expander("➕ Add Document Resource"):
                 extracted = uploaded_file.read().decode("utf-8")
             
             if extracted.strip():
-                # Safe character cap set to 3,500 (~800 tokens) to stay well within Groq free-tier TPM limits
-                if len(extracted) > 3500:
-                    extracted = extracted[:3500]
-                    st.toast("⚠️ Document optimized for fast processing (first 3,500 characters loaded).", icon="⚡")
+                # Strictly capped at 3,000 characters for instant sub-second processing speed
+                if len(extracted) > 3000:
+                    extracted = extracted[:3000]
+                    st.toast("⚡ Document trimmed to 3,000 chars for lightning-fast AI analysis.", icon="🚀")
                 
                 st.session_state.document_text = extracted
                 st.session_state.file_name = uploaded_file.name
@@ -221,7 +221,7 @@ if prompt := st.chat_input("Ask a question or request a summary of your document
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Build clean messages payload adhering to Groq token limits
+    # Build messages payload (Sends system prompt, document context, and ONLY the last 6 messages for maximum speed)
     messages_payload = [{"role": "system", "content": active_system_instruction}]
     
     if st.session_state.document_text:
@@ -230,7 +230,9 @@ if prompt := st.chat_input("Ask a question or request a summary of your document
             "content": f"Reference Document Context Provided by User:\n{st.session_state.document_text}"
         })
     
-    for msg in active_chat["messages"]:
+    # Keep only the last 6 messages to prevent token bloat and latency
+    recent_messages = active_chat["messages"][-6:]
+    for msg in recent_messages:
         messages_payload.append({"role": msg["role"], "content": msg["content"]})
 
     with st.chat_message("assistant"):

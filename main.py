@@ -138,12 +138,16 @@ def save_users(users_data):
 
 
 # -------------------------------------------------------------------------
-# 5. SESSION STATE FOR LOGIN
+# 5. SESSION STATE FOR LOGIN & PROFILE SETUP
 # -------------------------------------------------------------------------
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "username" not in st.session_state:
     st.session_state.username = None
+if "display_name" not in st.session_state:
+    st.session_state.display_name = None
+if "needs_display_name" not in st.session_state:
+    st.session_state.needs_display_name = False
 
 
 # -------------------------------------------------------------------------
@@ -164,9 +168,10 @@ if not st.session_state.logged_in:
             
             if st.button("Log In", use_container_width=True):
                 users = load_users()
-                if login_user in users and users[login_user] == login_pass:
+                if login_user in users and users[login_user].get("password") == login_pass:
                     st.session_state.logged_in = True
                     st.session_state.username = login_user.strip()
+                    st.session_state.display_name = users[login_user].get("display_name", login_user.strip())
                     st.success("Login successful!")
                     st.rerun()
                 else:
@@ -185,17 +190,45 @@ if not st.session_state.logged_in:
                 elif clean_user in users:
                     st.error("Username already exists. Please log in.")
                 else:
-                    users[clean_user] = signup_pass
+                    users[clean_user] = {
+                        "password": signup_pass,
+                        "display_name": clean_user
+                    }
                     save_users(users)
                     st.session_state.logged_in = True
                     st.session_state.username = clean_user
-                    st.success("Account created successfully!")
+                    st.session_state.needs_display_name = True
                     st.rerun()
     st.stop()
 
 
 # -------------------------------------------------------------------------
-# 7. USER-SPECIFIC CHAT STORAGE
+# 7. POST-SIGNUP: "WHAT SHOULD I CALL YOU?" SCREEN
+# -------------------------------------------------------------------------
+if st.session_state.needs_display_name:
+    st.markdown("<div class='brand-title' style='margin-top: 50px;'>gyan</div>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center; color: #00cec9; margin-top: 30px;'>Welcome! What should I call you?</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #a0aec0; margin-bottom: 30px;'>Please enter your preferred name or nickname for personalized greetings.</p>", unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 1.5, 1])
+    with col2:
+        preferred_name = st.text_input("Your Name / Nickname", value=st.session_state.username)
+        if st.button("Continue to Gyan", use_container_width=True):
+            if preferred_name.strip():
+                st.session_state.display_name = preferred_name.strip().capitalize()
+                users = load_users()
+                if st.session_state.username in users:
+                    users[st.session_state.username]["display_name"] = st.session_state.display_name
+                    save_users(users)
+                st.session_state.needs_display_name = False
+                st.rerun()
+            else:
+                st.warning("Please enter a valid name.")
+    st.stop()
+
+
+# -------------------------------------------------------------------------
+# 8. USER-SPECIFIC CHAT STORAGE
 # -------------------------------------------------------------------------
 safe_username = re.sub(r'[^a-zA-Z0-9]', '_', st.session_state.username)
 CHATS_FILE = f"chats_{safe_username}.json"
@@ -226,7 +259,7 @@ def save_chats(chats_data):
 
 
 # -------------------------------------------------------------------------
-# 8. MATH & TABLE REPAIR CLEANER
+# 9. MATH & TABLE REPAIR CLEANER
 # -------------------------------------------------------------------------
 def clean_math_syntax(text):
     if not text:
@@ -268,7 +301,7 @@ def clean_math_syntax(text):
 
 
 # -------------------------------------------------------------------------
-# 9. SESSION STATE INITIALIZATION
+# 10. SESSION STATE INITIALIZATION
 # -------------------------------------------------------------------------
 if "chats" not in st.session_state:
     st.session_state.chats = load_chats()
@@ -284,7 +317,7 @@ def get_active_chat():
 
 
 # -------------------------------------------------------------------------
-# 10. SIDEBAR
+# 11. SIDEBAR
 # -------------------------------------------------------------------------
 with st.sidebar:
     st.markdown("<div class='sidebar-title'>gyan</div>", unsafe_allow_html=True)
@@ -307,6 +340,7 @@ with st.sidebar:
     if st.button("🚪 Log Out", use_container_width=True):
         st.session_state.logged_in = False
         st.session_state.username = None
+        st.session_state.display_name = None
         if "chats" in st.session_state:
             del st.session_state.chats
         if "active_chat_id" in st.session_state:
@@ -420,40 +454,38 @@ with st.sidebar:
 
 
 # -------------------------------------------------------------------------
-# 11. MAIN HEADER WITH ENLARGED USER GREETING
-# -------------------------------------------------------------------------
-st.markdown("<div class='brand-title'>gyan</div>", unsafe_allow_html=True)
-display_name = st.session_state.username.capitalize()
-st.markdown(
-    f"""
-    <p style='
-        text-align:center;
-        color:#a0aec0;
-        font-size:13px;
-        letter-spacing:1px;
-        margin-top: 5px;
-        margin-bottom: 8px;
-    '>
-        Your Intelligent Multi-Persona AI Companion
-    </p>
-    <p style='
-        text-align:center;
-        color:#00cec9;
-        font-size:1.8rem;
-        font-weight:700;
-        margin-bottom:25px;
-    '>
-        Hello, {display_name}!
-    </p>
-    """,
-    unsafe_allow_html=True
-)
-
-
-# -------------------------------------------------------------------------
 # 12. ACTIVE CHAT & HISTORY
 # -------------------------------------------------------------------------
 active_chat = get_active_chat()
+
+# Display intro banner ONLY if the current chat has no messages yet
+if not active_chat["messages"]:
+    st.markdown("<div class='brand-title'>gyan</div>", unsafe_allow_html=True)
+    current_name = st.session_state.display_name or st.session_state.username.capitalize()
+    st.markdown(
+        f"""
+        <p style='
+            text-align:center;
+            color:#a0aec0;
+            font-size:13px;
+            letter-spacing:1px;
+            margin-top: 5px;
+            margin-bottom: 8px;
+        '>
+            Your Intelligent Multi-Persona AI Companion
+        </p>
+        <p style='
+            text-align:center;
+            color:#00cec9;
+            font-size:1.8rem;
+            font-weight:700;
+            margin-bottom:25px;
+        '>
+            Hello, {current_name}!
+        </p>
+        """,
+        unsafe_allow_html=True
+    )
 
 for message in active_chat["messages"]:
     with st.chat_message(message["role"]):

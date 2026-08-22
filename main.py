@@ -1,11 +1,12 @@
 import os
 import uuid
 import json
+import re
 import streamlit as st
 from groq import Groq
 
 # -------------------------------------------------------------------------
-# 1. PAGE CONFIGURATION & STYLING (With Custom Google Font)
+# 1. PAGE CONFIGURATION & STYLING
 # -------------------------------------------------------------------------
 st.set_page_config(
     page_title="GYAN AI",
@@ -22,7 +23,6 @@ hide_streamlit_style = """
 footer {visibility: hidden;}
 header {visibility: hidden;}
 
-/* Signature Product Branding Font (Orbitron) */
 .brand-title {
     font-family: 'Orbitron', sans-serif;
     font-size: 3rem;
@@ -100,7 +100,15 @@ def save_chats(chats_data):
         print(f"Error saving chats: {e}")
 
 # -------------------------------------------------------------------------
-# 4. STATE MANAGEMENT
+# 4. MATH CLEANER FUNCTION (Fixes raw brackets into proper math blocks)
+# -------------------------------------------------------------------------
+def clean_math_syntax(text):
+    # Converts raw [ \formula ] blocks into $$ \formula $$ so Streamlit renders equations properly
+    cleaned = re.sub(r'\[\s*(\\.*?)\s*\]', r'$$\1$$', text)
+    return cleaned
+
+# -------------------------------------------------------------------------
+# 5. STATE MANAGEMENT
 # -------------------------------------------------------------------------
 if "chats" not in st.session_state:
     st.session_state.chats = load_chats()
@@ -115,7 +123,7 @@ def get_active_chat():
     return st.session_state.chats[0]
 
 # -------------------------------------------------------------------------
-# 5. SIDEBAR: SIGNATURE BRANDING, CHAT HISTORY & PERSONAS
+# 6. SIDEBAR: BRANDING, CHAT HISTORY & PERSONAS
 # -------------------------------------------------------------------------
 with st.sidebar:
     st.markdown("<div class='sidebar-title'>gyan</div>", unsafe_allow_html=True)
@@ -172,13 +180,14 @@ with st.sidebar:
             "You are an elite university Exam Prep Coach specializing in rigorous engineering and technical subjects. "
             "When given a topic, formula, or syllabus item, break it down into clean step-by-step derivations, "
             "key conceptual definitions, and standard numerical problem-solving workflows. "
-            "Keep explanations high-yield, structured, and tailored for scoring top semester exam grades."
+            "Always format your mathematical equations and derivations using standard LaTeX delimiters ($...$ for inline and $$...$$ for display equations) "
+            "so they render correctly on the screen. Never output raw LaTeX wrapped in square brackets like [ \\... ]."
         ),
         "Strict Professor": (
             "You are a notoriously strict, old-school university professor holding a viva and grading tests. "
             "Do not accept vague answers or sugarcoat feedback. When the student answers a viva question or submits test work, "
             "critique their logic brutally, point out flaws, and assign a strict numeric score out of 10 with detailed remarks. "
-            "Never give a 10/10 unless the answer is flawless."
+            "Always format mathematical equations using proper LaTeX delimiters ($...$ or $$...$$)."
         ),
         "Senior Tech Lead": "You are an expert Senior Tech Lead. Provide clean, efficient code snippets, rigorous code reviews, and robust software architecture guidance.",
         "Data Science Mentor": "You are a Data Science Mentor. Help with machine learning algorithms, pandas dataframes, scikit-learn pipelines, statistics, and data cleaning workflows.",
@@ -188,17 +197,17 @@ with st.sidebar:
     active_system_instruction = system_instructions.get(persona_choice, "You are gyan, a helpful AI assistant.")
 
 # -------------------------------------------------------------------------
-# 6. MAIN CHAT INTERFACE WITH SIGNATURE PRODUCT FACE
+# 7. MAIN CHAT INTERFACE
 # -------------------------------------------------------------------------
 st.markdown("<div class='brand-title'>gyan</div>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #a0aec0; font-size: 13px; letter-spacing: 1px; margin-bottom: 25px;'>Your Ultimate Semester Exam & Technical Companion</p>", unsafe_allow_html=True)
 
 active_chat = get_active_chat()
 
-# Render chat message history
+# Render chat message history with cleaned math formatting
 for message in active_chat["messages"]:
     with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+        st.markdown(clean_math_syntax(message["content"]))
 
 # Bottom Chat Input
 if prompt := st.chat_input("Ask an exam derivation, technical problem, or chat with your coach..."):
@@ -233,8 +242,11 @@ if prompt := st.chat_input("Ask an exam derivation, technical problem, or chat w
         except Exception as e:
             response_text = f"API Error Encountered: {e}"
         
-        message_placeholder.markdown(response_text)
-        active_chat["messages"].append({"role": "assistant", "content": response_text})
+        # Clean the output math syntax before rendering and saving
+        formatted_response = clean_math_syntax(response_text)
+        
+        message_placeholder.markdown(formatted_response)
+        active_chat["messages"].append({"role": "assistant", "content": formatted_response})
         
         save_chats(st.session_state.chats)
         st.rerun()

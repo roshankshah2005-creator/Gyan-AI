@@ -195,10 +195,25 @@ def clean_math_syntax(text):
 
 
 # -------------------------------------------------------------------------
-# 6. SESSION STATE
+# 6. SESSION STATE & FRESH USER INITIALIZATION
 # -------------------------------------------------------------------------
 if "chats" not in st.session_state:
     st.session_state.chats = load_chats()
+
+# Ensure a brand new browser session always starts with a fresh empty chat page
+if "initialized_session" not in st.session_state:
+    st.session_state.initialized_session = True
+    new_id = f"chat_{uuid.uuid4().hex[:6]}"
+    st.session_state.chats.insert(
+        0,
+        {
+            "id": new_id,
+            "title": "New Chat",
+            "messages": []
+        }
+    )
+    st.session_state.active_chat_id = new_id
+    save_chats(st.session_state.chats)
 
 if "active_chat_id" not in st.session_state:
     st.session_state.active_chat_id = st.session_state.chats[0]["id"]

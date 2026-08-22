@@ -116,7 +116,7 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------------
-# 4. USER DATABASE & AUTHENTICATION STORAGE
+# 4. USER DATABASE & AUTHENTICATION STORAGE (UUID-based for duplicate usernames)
 # -------------------------------------------------------------------------
 USERS_FILE = "users.json"
 
@@ -125,11 +125,12 @@ def load_users():
         try:
             with open(USERS_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                # Normalize old format if necessary
                 normalized = {}
                 for k, v in data.items():
                     if isinstance(v, str):
-                        normalized[k] = {"password": v, "display_name": k}
+                        # Migrate legacy plain-string user entries
+                        new_id = uuid.uuid4().hex[:8]
+                        normalized[new_id] = {"username": k, "password": v, "display_name": k}
                     else:
                         normalized[k] = v
                 return normalized
@@ -150,6 +151,8 @@ def save_users(users_data):
 # -------------------------------------------------------------------------
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
+if "user_id" not in st.session_state:
+    st.session_state.user_id = None
 if "username" not in st.session_state:
     st.session_state.username = None
 if "display_name" not in st.session_state:
@@ -176,10 +179,21 @@ if not st.session_state.logged_in:
             
             if st.button("Log In", use_container_width=True):
                 users = load_users()
-                if login_user in users and users[login_user].get("password") == login_pass:
+                matched_user_id = None
+                matched_data = None
+                
+                # Search for matching username & password among all registered accounts
+                for uid, udata in users.items():
+                    if udata.get("username") == login_user.strip() and udata.get("password") == login_pass:
+                        matched_user_id = uid
+                        matched_data = udata
+                        break
+                
+                if matched_user_id:
                     st.session_state.logged_in = True
-                    st.session_state.username = login_user.strip()
-                    st.session_state.display_name = users[login_user].get("display_name", login_user.strip())
+                    st.session_state.user_id = matched_user_id
+                    st.session_state.username = matched_data.get("username")
+                    st.session_state.display_name = matched_data.get("display_name", matched_data.get("username"))
                     st.success("Login successful!")
                     st.rerun()
                 else:
@@ -191,30 +205,25 @@ if not st.session_state.logged_in:
             signup_pass = st.text_input("Choose Password", type="password", key="signup_pass")
             
             if st.button("Sign Up", use_container_width=True):
-                users = load_users()
                 clean_user = signup_user.strip()
                 if not clean_user or not signup_pass:
                     st.warning("Please fill in all fields.")
                 else:
-                    if clean_user in users:
-                        if users[clean_user].get("password") == signup_pass:
-                            st.session_state.logged_in = True
-                            st.session_state.username = clean_user
-                            st.session_state.display_name = users[clean_user].get("display_name", clean_user)
-                            st.success("Logged in successfully!")
-                            st.rerun()
-                        else:
-                            st.error("This username exists with a different password. Please check your password.")
-                    else:
-                        users[clean_user] = {
-                            "password": signup_pass,
-                            "display_name": clean_user
-                        }
-                        save_users(users)
-                        st.session_state.logged_in = True
-                        st.session_state.username = clean_user
-                        st.session_state.needs_display_name = True
-                        st.rerun()
+                    users = load_users()
+                    # Generate a brand new unique ID for this user, allowing duplicate usernames freely
+                    new_uid = uuid.uuid4().hex[:8]
+                    users[new_uid] = {
+                        "username": clean_user,
+                        "password": signup_pass,
+                        "display_name": clean_user
+                    }
+                    save_users(users)
+                    
+                    st.session_state.logged_in = True
+                    st.session_state.user_id = new_uid
+                    st.session_state.username = clean_user
+                    st.session_state.needs_display_name = True
+                    st.rerun()
     st.stop()
 
 
@@ -233,8 +242,8 @@ if st.session_state.needs_display_name:
             if preferred_name.strip():
                 st.session_state.display_name = preferred_name.strip().capitalize()
                 users = load_users()
-                if st.session_state.username in users:
-                    users[st.session_state.username]["display_name"] = st.session_state.display_name
+                if st.session_state.user_id in users:
+                    users[st.session_state.user_id]["display_name"] = st.session_state.display_name
                     save_users(users)
                 st.session_state.needs_display_name = False
                 st.rerun()
@@ -244,10 +253,9 @@ if st.session_state.needs_display_name:
 
 
 # -------------------------------------------------------------------------
-# 8. USER-SPECIFIC CHAT STORAGE
+# 8. USER-SPECIFIC CHAT STORAGE (Bound to Unique User ID)
 # -------------------------------------------------------------------------
-safe_username = re.sub(r'[^a-zA-Z0-9]', '_', st.session_state.username)
-CHATS_FILE = f"chats_{safe_username}.json"
+CHATS_FILE = f"chats_{st.session_state.user_id}.json"
 
 def load_chats():
     if os.path.exists(CHATS_FILE):
@@ -355,6 +363,7 @@ with st.sidebar:
 
     if st.button("🚪 Log Out", use_container_width=True):
         st.session_state.logged_in = False
+        st.session_state.user_id = None
         st.session_state.username = None
         st.session_state.display_name = None
         if "chats" in st.session_state:

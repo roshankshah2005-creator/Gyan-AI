@@ -26,4 +26,6 @@ gemini-ml-bot/
 ├── __pycache__
 ├── app.py             # Main Streamlit web application & UI logic
 ├── ml_model.py        # Scikit-Learn Naive Bayes intent classification pipeline
-└── README.md          # Project documentation
+├──  README.md          # Project documentation
+├── requirements.txt
+├── service_accounts.json

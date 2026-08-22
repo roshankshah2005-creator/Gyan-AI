@@ -16,36 +16,30 @@ st.set_page_config(
 )
 
 # -------------------------------------------------------------------------
-# 2. AUTOMATED API KEY & CLIENT INITIALIZATION (Vertex AI Mode for AQ Keys)
+# 2. CLIENT INITIALIZATION (Direct AI Studio Mode for AQ Keys)
 # -------------------------------------------------------------------------
-api_key = None
-gcp_project = None
+# Clean background GCP variables so the SDK doesn't get confused
+for gcp_var in ["GOOGLE_APPLICATION_CREDENTIALS", "GOOGLE_CLOUD_PROJECT", "GOOGLE_CLOUD_REGION"]:
+    if gcp_var in os.environ:
+        del os.environ[gcp_var]
 
+api_key = None
 try:
     if "GEMINI_API_KEY" in st.secrets:
         api_key = str(st.secrets["GEMINI_API_KEY"]).strip()
-    if "GOOGLE_CLOUD_PROJECT" in st.secrets:
-        gcp_project = str(st.secrets["GOOGLE_CLOUD_PROJECT"]).strip()
 except Exception:
     pass
 
 if not api_key:
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
-if not gcp_project:
-    gcp_project = os.getenv("GOOGLE_CLOUD_PROJECT", "").strip()
 
-if not api_key or not gcp_project:
-    st.error("⚠️ GEMINI_API_KEY and GOOGLE_CLOUD_PROJECT must both be configured in your Streamlit Secrets.")
+if not api_key:
+    st.error("⚠️ GEMINI_API_KEY is missing. Please configure it in your Streamlit Secrets.")
     st.stop()
 
-# Initialize client using Vertex AI backend to properly handle AQ. keys
+# Initialize client cleanly — requires `google-genai` package to be up-to-date
 try:
-    client = genai.Client(
-        vertexai=True,
-        project=gcp_project,
-        location="us-central1", # Change to your Google Cloud region if needed
-        api_key=api_key
-    )
+    client = genai.Client(api_key=api_key)
 except Exception as e:
     st.error(f"Failed to initialize Gemini client: {e}")
     st.stop()
@@ -58,21 +52,21 @@ with st.sidebar:
     persona_choice = st.selectbox(
         "Choose Persona",
         [
-            "Senior Tech Lead",
-            "Data Science Mentor",
-            "Exam Prep Coach",
+            "Senior Tech Lead", 
+            "Data Science Mentor", 
+            "Exam Prep Coach", 
             "Creative Director"
         ],
         label_visibility="collapsed"
     )
-
+    
     system_instructions = {
         "Senior Tech Lead": "You are an expert Senior Tech Lead. Provide clean, efficient code snippets, rigorous code reviews, and robust software architecture guidance.",
         "Data Science Mentor": "You are a Data Science Mentor. Help with machine learning algorithms, pandas dataframes, scikit-learn pipelines, statistics, and data cleaning workflows.",
         "Exam Prep Coach": "You are an academic Exam Prep Coach. Break down tough engineering concepts, create structured study guides, summarize chapters, and give high-yield revision notes.",
         "Creative Director": "You are a Creative Director. Offer sharp typography feedback, color palette advice, design layouts, and creative direction for visual projects."
     }
-
+    
     active_system_instruction = system_instructions.get(persona_choice, "You are Gyan, a helpful AI assistant.")
 
     st.markdown("---")
@@ -120,14 +114,14 @@ if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc...
     contents = []
     if document_text:
         contents.append(f"Context from uploaded document:\n{document_text}\n\n")
-
+    
     for msg in st.session_state.messages:
         contents.append(f"{msg['role'].capitalize()}: {msg['content']}")
 
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
         message_placeholder.markdown("Thinking...")
-
+        
         response_text = None
         try:
             response = client.models.generate_content(
@@ -141,6 +135,6 @@ if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc...
             response_text = response.text
         except Exception as e:
             response_text = f"API Error Encountered: {e}"
-
+        
         message_placeholder.markdown(response_text)
         st.session_state.messages.append({"role": "assistant", "content": response_text})

@@ -128,3 +128,14 @@ if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc...
         
         message_placeholder.markdown(response_text)
         st.session_state.messages.append({"role": "assistant", "content": response_text})
+# -------------------------------------------------------------------------
+# HIDE STREAMLIT DEFAULT UI & HEADER
+# -------------------------------------------------------------------------
+hide_streamlit_style = """
+<style>
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
+</style>
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)

@@ -32,15 +32,17 @@ if not api_key:
     st.error("API Key not configured properly on the server.")
     st.stop()
 
-# CRITICAL: Force the SDK to use standard AI Studio API keys, not Vertex AI credentials
+# FORCE AI STUDIO MODE & PURGE CONFLICTING GCP VARIABLES
 os.environ["GEMINI_API_KEY"] = api_key
 os.environ["GOOGLE_API_KEY"] = api_key
-if "GOOGLE_GENAI_USE_VERTEXAI" in os.environ:
-    del os.environ["GOOGLE_GENAI_USE_VERTEXAI"]
 
-# Initialize client cleanly
-client = genai.Client()
+# Remove variables that trick the SDK into thinking it's on Vertex AI
+for gcp_var in ["GOOGLE_APPLICATION_CREDENTIALS", "GOOGLE_CLOUD_PROJECT", "GOOGLE_CLOUD_REGION"]:
+    if gcp_var in os.environ:
+        del os.environ[gcp_var]
 
+# Explicitly pass vertexai=False to force the Developer API backend
+client = genai.Client(api_key=api_key, vertexai=False)
 # -------------------------------------------------------------------------
 # 3. SIDEBAR CONFIGURATION & PERSONAS
 # -------------------------------------------------------------------------

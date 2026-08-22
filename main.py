@@ -5,7 +5,7 @@ import streamlit as st
 from groq import Groq
 
 # -------------------------------------------------------------------------
-# 1. PAGE CONFIGURATION & STYLING
+# 1. PAGE CONFIGURATION & AGGRESSIVE STYLING (Hides any leftover elements)
 # -------------------------------------------------------------------------
 st.set_page_config(
     page_title="Gyan AI",
@@ -19,6 +19,11 @@ hide_streamlit_style = """
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 header {visibility: hidden;}
+
+/* Force-hide any lingering file uploaders or document buttons */
+[data-testid="stFileUploader"], .stFileUploader, div.stFileUploader {
+    display: none !important;
+}
 </style>
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
@@ -166,7 +171,6 @@ for message in active_chat["messages"]:
 if prompt := st.chat_input("Ask a coding problem, exam question, or chat with your AI persona..."):
     active_chat["messages"].append({"role": "user", "content": prompt})
     
-    # Auto-title chat based on the first query
     if active_chat["title"] == "New Chat":
         active_chat["title"] = prompt[:25] + ("..." if len(prompt) > 25 else "")
 
@@ -175,10 +179,8 @@ if prompt := st.chat_input("Ask a coding problem, exam question, or chat with yo
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Build messages payload
     messages_payload = [{"role": "system", "content": active_system_instruction}]
     
-    # Keep recent messages for fast context handling
     recent_messages = active_chat["messages"][-10:]
     for msg in recent_messages:
         messages_payload.append({"role": msg["role"], "content": msg["content"]})

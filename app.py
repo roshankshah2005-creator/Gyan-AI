@@ -124,7 +124,7 @@ if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc...
     for msg in st.session_state.messages:
         contents.append(f"{msg['role'].capitalize()}: {msg['content']}")
 
-    # Generate AI response with retry logic and 3.6-flash model
+    # Generate AI response with retry logic and 2.5-flash model
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
         message_placeholder.markdown("Thinking...")
@@ -135,7 +135,7 @@ if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc...
         for attempt in range(max_retries):
             try:
                 response = client.models.generate_content(
-                    model='gemini-3.6-flash',  # Locked to version 3.6
+                    model='gemini-2.5-flash', 
                     contents=contents,
                     config=types.GenerateContentConfig(
                         system_instruction=active_system_instruction,

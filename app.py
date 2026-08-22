@@ -6,27 +6,21 @@ from google.genai import types
 from pypdf import PdfReader
 from google.oauth2 import service_account
 # -------------------------------------------------------------------------
-# CLIENT INITIALIZATION VIA EXPLICIT GOOGLE AUTH (Bypasses JWT/gcloud errors)
+# CLIENT INITIALIZATION FOR AQ. KEYS (Vertex AI API Key Mode)
 # -------------------------------------------------------------------------
-KEY_FILE_PATH = "service_account.json"
+API_KEY = "AQ.Ab8RN6KqwycSHIz3cBUCdNiguNiv9EMVvcNLN9joxZJgW-rZCg"
 PROJECT_ID = "gen-lang-client-0656156962"
 
 try:
-    # Load credentials using google-auth, which handles signature creation natively
-    credentials = service_account.Credentials.from_service_account_file(
-        KEY_FILE_PATH,
-        scopes=["https://www.googleapis.com/auth/cloud-platform"]
-    )
-    
-    # Initialize the client in Vertex AI mode using the authenticated credentials object
+    # Modern SDK allows using AQ keys directly when routed via Vertex mode with a Project ID
     client = genai.Client(
         vertexai=True,
         project=PROJECT_ID,
         location="us-central1",
-        credentials=credentials
+        api_key=API_KEY
     )
 except Exception as e:
-    st.error(f"Failed to initialize authenticated client: {e}")
+    st.error(f"Failed to initialize client: {e}")
     st.stop()
 # -------------------------------------------------------------------------
 # 1. PAGE CONFIGURATION & SERVICE ACCOUNT AUTHENTICATION

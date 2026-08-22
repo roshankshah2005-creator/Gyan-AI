@@ -4,6 +4,7 @@ import json
 import streamlit as st
 from groq import Groq
 from pypdf import PdfReader
+from PIL import Image
 
 # -------------------------------------------------------------------------
 # 1. PAGE CONFIGURATION & STYLING
@@ -63,7 +64,6 @@ def load_chats():
                     return data
         except Exception:
             pass
-    # Default initial chat if no file exists
     initial_id = f"chat_{uuid.uuid4().hex[:6]}"
     return [{"id": initial_id, "title": "New Chat", "messages": []}]
 
@@ -91,7 +91,7 @@ def get_active_chat():
     return st.session_state.chats[0]
 
 # -------------------------------------------------------------------------
-# 5. SIDEBAR CONFIGURATION & CHAT HISTORY WITH DELETION
+# 5. SIDEBAR CONFIGURATION (Cleaned up: Only History & Personas)
 # -------------------------------------------------------------------------
 with st.sidebar:
     st.markdown("### 💬 CHAT HISTORY")
@@ -105,7 +105,7 @@ with st.sidebar:
 
     st.markdown("---")
     
-    # Display saved chats list with select and delete buttons side-by-side
+    
     for chat in list(st.session_state.chats):
         is_active = chat["id"] == st.session_state.active_chat_id
         label = f"📌 {chat['title']}" if is_active else chat["title"]
@@ -117,15 +117,12 @@ with st.sidebar:
                 st.rerun()
         with col2:
             if st.button("🗑️", key=f"del_{chat['id']}", use_container_width=True, help="Delete chat"):
-                # Remove chat from list
                 st.session_state.chats = [c for c in st.session_state.chats if c["id"] != chat["id"]]
                 
-                # If no chats remain, create a clean default one
                 if not st.session_state.chats:
                     new_id = f"chat_{uuid.uuid4().hex[:6]}"
                     st.session_state.chats = [{"id": new_id, "title": "New Chat", "messages": []}]
                 
-                # If active chat was deleted, switch to the top remaining chat
                 if st.session_state.active_chat_id == chat["id"]:
                     st.session_state.active_chat_id = st.session_state.chats[0]["id"]
                 
@@ -161,57 +158,76 @@ with st.sidebar:
     
     active_system_instruction = system_instructions.get(persona_choice, "You are Gyan, a helpful AI assistant.")
 
-    st.markdown("---")
-    st.markdown("### 📄 DOCUMENT RAG")
-    uploaded_file = st.file_uploader("Upload PDF or TXT", type=["pdf", "txt"], label_visibility="collapsed")
-    st.caption("200MB per file • PDF, TXT")
-
-    document_text = ""
-    if uploaded_file is not None:
-        try:
-            if uploaded_file.type == "application/pdf":
-                reader = PdfReader(uploaded_file)
-                for page in reader.pages:
-                    text = page.extract_text()
-                    if text:
-                        document_text += text + "\n"
-            else:
-                document_text = uploaded_file.read().decode("utf-8")
-            st.success("Document loaded successfully!")
-        except Exception as e:
-            st.error(f"Error reading document: {e}")
-
 # -------------------------------------------------------------------------
-# 6. CHAT INTERFACE & MESSAGE HANDLING
+# 6. CHAT INTERFACE & BOTTOM TASKBAR FILE UPLOAD
 # -------------------------------------------------------------------------
 st.markdown("<h1 style='text-align: center; color: #a29bfe;'>GYAN</h1>", unsafe_allow_html=True)
 
 active_chat = get_active_chat()
 
-# Render existing messages for the active chat
+
 for message in active_chat["messages"]:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc..."):
-    # Append user prompt to current chat
-    active_chat["messages"].append({"role": "user", "content": prompt})
+
+input_col1, input_col2 = st.columns([0.08, 0.92])
+
+uploaded_resource = None
+with input_col1:
     
-    # Auto-update title if it's the first message
+    with st.popover("➕", help="Upload photo, PDF, or text resource"):
+        uploaded_resource = st.file_uploader(
+            "Upload resource", 
+            type=["png", "jpg", "jpeg", "pdf", "txt"], 
+            label_visibility="collapsed"
+        )
+
+with input_col2:
+    prompt = st.chat_input("Ask a coding problem, exam query, or reference an uploaded file...")
+
+
+resource_context = ""
+if uploaded_resource is not None:
+    try:
+        file_extension = uploaded_resource.name.split(".")[-1].lower()
+        if file_extension in ["png", "jpg", "jpeg"]:
+            
+            resource_context = f"[Attached Image: {uploaded_resource.name}]"
+            st.info(f"📷 Attached image: {uploaded_resource.name}")
+        elif file_extension == "pdf":
+            reader = PdfReader(uploaded_resource)
+            for page in reader.pages:
+                text = page.extract_text()
+                if text:
+                    resource_context += text + "\n"
+            st.success(f"📄 Loaded PDF: {uploaded_resource.name}")
+        elif file_extension == "txt":
+            resource_context = uploaded_resource.read().decode("utf-8")
+            st.success(f"📝 Loaded Text File: {uploaded_resource.name}")
+    except Exception as e:
+        st.error(f"Error processing resource: {e}")
+
+if prompt:
+    
+    full_user_input = prompt
+    if resource_context:
+        full_user_input = f"{prompt}\n\n[Resource Content / Context Provided]:\n{resource_context}"
+
+    
+    active_chat["messages"].append({"role": "user", "content": full_user_input})
+    
+    
     if active_chat["title"] == "New Chat":
         active_chat["title"] = prompt[:25] + ("..." if len(prompt) > 25 else "")
 
-    # Save changes to disk immediately
     save_chats(st.session_state.chats)
 
     with st.chat_message("user"):
-        st.markdown(prompt)
+        st.markdown(full_user_input)
 
     # Build messages payload for Groq
     messages_payload = [{"role": "system", "content": active_system_instruction}]
-    
-    if document_text:
-        messages_payload.append({"role": "system", "content": f"Context from uploaded document:\n{document_text}"})
     
     for msg in active_chat["messages"]:
         messages_payload.append({"role": msg["role"], "content": msg["content"]})
@@ -234,6 +250,5 @@ if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc...
         message_placeholder.markdown(response_text)
         active_chat["messages"].append({"role": "assistant", "content": response_text})
         
-        # Save changes after response is received
         save_chats(st.session_state.chats)
         st.rerun()

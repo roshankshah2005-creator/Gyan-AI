@@ -63,7 +63,7 @@ def load_chats():
                     return data
         except Exception:
             pass
-    
+    # Default initial chat if no file exists
     initial_id = f"chat_{uuid.uuid4().hex[:6]}"
     return [{"id": initial_id, "title": "New Chat", "messages": []}]
 
@@ -91,7 +91,7 @@ def get_active_chat():
     return st.session_state.chats[0]
 
 # -------------------------------------------------------------------------
-# 5. SIDEBAR CONFIGURATION & CHAT HISTORY
+# 5. SIDEBAR CONFIGURATION & CHAT HISTORY WITH DELETION
 # -------------------------------------------------------------------------
 with st.sidebar:
     st.markdown("### 💬 CHAT HISTORY")
@@ -105,14 +105,32 @@ with st.sidebar:
 
     st.markdown("---")
     
-    # Display saved chats list from persistent storage
-    for chat in st.session_state.chats:
+    # Display saved chats list with select and delete buttons side-by-side
+    for chat in list(st.session_state.chats):
         is_active = chat["id"] == st.session_state.active_chat_id
         label = f"📌 {chat['title']}" if is_active else chat["title"]
         
-        if st.button(label, key=f"btn_{chat['id']}", use_container_width=True):
-            st.session_state.active_chat_id = chat["id"]
-            st.rerun()
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            if st.button(label, key=f"btn_{chat['id']}", use_container_width=True):
+                st.session_state.active_chat_id = chat["id"]
+                st.rerun()
+        with col2:
+            if st.button("🗑️", key=f"del_{chat['id']}", use_container_width=True, help="Delete chat"):
+                # Remove chat from list
+                st.session_state.chats = [c for c in st.session_state.chats if c["id"] != chat["id"]]
+                
+                # If no chats remain, create a clean default one
+                if not st.session_state.chats:
+                    new_id = f"chat_{uuid.uuid4().hex[:6]}"
+                    st.session_state.chats = [{"id": new_id, "title": "New Chat", "messages": []}]
+                
+                # If active chat was deleted, switch to the top remaining chat
+                if st.session_state.active_chat_id == chat["id"]:
+                    st.session_state.active_chat_id = st.session_state.chats[0]["id"]
+                
+                save_chats(st.session_state.chats)
+                st.rerun()
 
     st.markdown("---")
     st.markdown("### 🤖 AI PERSONA")
@@ -170,26 +188,26 @@ st.markdown("<h1 style='text-align: center; color: #a29bfe;'>GYAN</h1>", unsafe_
 
 active_chat = get_active_chat()
 
-
+# Render existing messages for the active chat
 for message in active_chat["messages"]:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
 if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc..."):
-    
+    # Append user prompt to current chat
     active_chat["messages"].append({"role": "user", "content": prompt})
     
-    
+    # Auto-update title if it's the first message
     if active_chat["title"] == "New Chat":
         active_chat["title"] = prompt[:25] + ("..." if len(prompt) > 25 else "")
 
-    
+    # Save changes to disk immediately
     save_chats(st.session_state.chats)
 
     with st.chat_message("user"):
         st.markdown(prompt)
 
-   
+    # Build messages payload for Groq
     messages_payload = [{"role": "system", "content": active_system_instruction}]
     
     if document_text:
@@ -216,5 +234,6 @@ if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc...
         message_placeholder.markdown(response_text)
         active_chat["messages"].append({"role": "assistant", "content": response_text})
         
+        # Save changes after response is received
         save_chats(st.session_state.chats)
         st.rerun()

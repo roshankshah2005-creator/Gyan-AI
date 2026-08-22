@@ -16,49 +16,74 @@ st.set_page_config(
 
 hide_streamlit_style = """
 <style>
-/* Hide Streamlit default UI */
+/* =========================================================
+   HIDE STREAMLIT DEFAULT UI
+   ========================================================= */
+
 #MainMenu {
-    visibility: hidden;
+    visibility: hidden !important;
 }
 
 footer {
-    visibility: hidden;
+    visibility: hidden !important;
 }
 
 header {
-    visibility: hidden;
+    visibility: hidden !important;
 }
 
-/* Hide ALL file/document upload elements */
+
+/* =========================================================
+   HIDE FILE UPLOADERS
+   ========================================================= */
+
 [data-testid="stFileUploader"] {
     display: none !important;
 }
 
-[data-testid="stFileUploaderDropzone"] {
+
+/* =========================================================
+   HIDE "ADD DOCUMENT" / ATTACHMENT BUTTON
+   FROM CHAT INPUT
+   ========================================================= */
+
+/* Chat input attachment button */
+[data-testid="stChatInput"] button[aria-label*="file" i],
+[data-testid="stChatInput"] button[aria-label*="document" i],
+[data-testid="stChatInput"] button[title*="file" i],
+[data-testid="stChatInput"] button[title*="document" i] {
     display: none !important;
 }
 
-[data-testid="stFileUploaderDropzoneInstructions"] {
+
+/* Streamlit attachment button */
+[data-testid="stChatInput"] [data-testid*="File"] {
     display: none !important;
 }
 
-/* Hide document/file buttons */
-button[title*="document" i],
-button[aria-label*="document" i],
-button[title*="file" i],
-button[aria-label*="file" i] {
-    display: none !important;
+
+/* Buttons containing attachment icons */
+[data-testid="stChatInput"] button:has(svg) {
+    /* Don't hide all buttons — submit button must remain */
 }
 
-/* Hide any element containing Add Document */
-div:has(> button) {
-    /* Keep normal Streamlit buttons */
+
+/* =========================================================
+   CLEAN CHAT INPUT
+   ========================================================= */
+
+[data-testid="stChatInput"] {
+    border-radius: 14px !important;
 }
 
-/* General clean layout */
+
+/* =========================================================
+   GENERAL LAYOUT
+   ========================================================= */
+
 .block-container {
-    padding-top: 2rem;
-    padding-bottom: 5rem;
+    padding-top: 2rem !important;
+    padding-bottom: 5rem !important;
 }
 </style>
 """

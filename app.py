@@ -26,7 +26,6 @@ try:
 except Exception as e:
     st.error(f"Failed to initialize client via Service Account: {e}")
     st.stop()
-Switching to the servic
 
 # -------------------------------------------------------------------------
 # 2. CLIENT INITIALIZATION (Direct AI Studio Mode for AQ Keys)

@@ -116,29 +116,89 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------------
-# 4. IP-BASED CHAT STORAGE
+# 4. USER DATABASE & AUTHENTICATION STORAGE
 # -------------------------------------------------------------------------
-def get_user_ip():
+USERS_FILE = "users.json"
+
+def load_users():
+    if os.path.exists(USERS_FILE):
+        try:
+            with open(USERS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+def save_users(users_data):
     try:
-        # Streamlit header check for proxy/cloud environments
-        headers = st.context.headers
-        forwarded_ip = headers.get("X-Forwarded-For")
-        if forwarded_ip:
-            # X-Forwarded-For can contain multiple comma-separated IPs; take the first one
-            return forwarded_ip.split(",")[0].strip()
+        with open(USERS_FILE, "w", encoding="utf-8") as f:
+            json.dump(users_data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"Error saving users: {e}")
+
+
+# -------------------------------------------------------------------------
+# 5. SESSION STATE FOR LOGIN
+# -------------------------------------------------------------------------
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "username" not in st.session_state:
+    st.session_state.username = None
+
+
+# -------------------------------------------------------------------------
+# 6. AUTHENTICATION SCREEN (Login / Sign Up)
+# -------------------------------------------------------------------------
+if not st.session_state.logged_in:
+    st.markdown("<div class='brand-title' style='margin-top: 50px;'>gyan</div>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #a0aec0; margin-bottom: 30px;'>Log in or sign up to access your personal neural chat history.</p>", unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 1.5, 1])
+    with col2:
+        tab_login, tab_signup = st.tabs(["🔑 Log In", "📝 Sign Up"])
         
-        real_ip = headers.get("X-Real-Ip")
-        if real_ip:
-            return real_ip.strip()
-    except Exception:
-        pass
-    return "local_user"
+        with tab_login:
+            st.subheader("Welcome Back")
+            login_user = st.text_input("Username", key="login_user")
+            login_pass = st.text_input("Password", type="password", key="login_pass")
+            
+            if st.button("Log In", use_container_width=True):
+                users = load_users()
+                if login_user in users and users[login_user] == login_pass:
+                    st.session_state.logged_in = True
+                    st.session_state.username = login_user.strip()
+                    st.success("Login successful!")
+                    st.rerun()
+                else:
+                    st.error("Invalid username or password.")
+        
+        with tab_signup:
+            st.subheader("Create an Account")
+            signup_user = st.text_input("Choose Username", key="signup_user")
+            signup_pass = st.text_input("Choose Password", type="password", key="signup_pass")
+            
+            if st.button("Sign Up", use_container_width=True):
+                users = load_users()
+                clean_user = signup_user.strip()
+                if not clean_user or not signup_pass:
+                    st.warning("Please fill in all fields.")
+                elif clean_user in users:
+                    st.error("Username already exists. Please log in.")
+                else:
+                    users[clean_user] = signup_pass
+                    save_users(users)
+                    st.session_state.logged_in = True
+                    st.session_state.username = clean_user
+                    st.success("Account created successfully!")
+                    st.rerun()
+    st.stop()
 
-# Generate a safe filename based on the user's IP address
-raw_ip = get_user_ip()
-safe_ip = re.sub(r'[^a-zA-Z0-9]', '_', raw_ip)
-CHATS_FILE = f"chats_{safe_ip}.json"
 
+# -------------------------------------------------------------------------
+# 7. USER-SPECIFIC CHAT STORAGE
+# -------------------------------------------------------------------------
+safe_username = re.sub(r'[^a-zA-Z0-9]', '_', st.session_state.username)
+CHATS_FILE = f"chats_{safe_username}.json"
 
 def load_chats():
     if os.path.exists(CHATS_FILE):
@@ -157,22 +217,16 @@ def load_chats():
         "messages": []
     }]
 
-
 def save_chats(chats_data):
     try:
         with open(CHATS_FILE, "w", encoding="utf-8") as f:
-            json.dump(
-                chats_data,
-                f,
-                ensure_ascii=False,
-                indent=2
-            )
+            json.dump(chats_data, f, ensure_ascii=False, indent=2)
     except Exception as e:
         print(f"Error saving chats: {e}")
 
 
 # -------------------------------------------------------------------------
-# 5. MATH & TABLE REPAIR CLEANER
+# 8. MATH & TABLE REPAIR CLEANER
 # -------------------------------------------------------------------------
 def clean_math_syntax(text):
     if not text:
@@ -214,14 +268,13 @@ def clean_math_syntax(text):
 
 
 # -------------------------------------------------------------------------
-# 6. SESSION STATE & FRESH USER INITIALIZATION
+# 9. SESSION STATE INITIALIZATION
 # -------------------------------------------------------------------------
 if "chats" not in st.session_state:
     st.session_state.chats = load_chats()
 
 if "active_chat_id" not in st.session_state:
     st.session_state.active_chat_id = st.session_state.chats[0]["id"]
-
 
 def get_active_chat():
     for chat in st.session_state.chats:
@@ -231,25 +284,34 @@ def get_active_chat():
 
 
 # -------------------------------------------------------------------------
-# 7. SIDEBAR
+# 10. SIDEBAR
 # -------------------------------------------------------------------------
 with st.sidebar:
     st.markdown("<div class='sidebar-title'>gyan</div>", unsafe_allow_html=True)
     st.markdown(
-        """
+        f"""
         <p style='
             text-align:center;
             color:#a0aec0;
             font-size:10px;
             letter-spacing:2px;
             margin-top:-5px;
-            margin-bottom:20px;
+            margin-bottom:10px;
         '>
-            NEURAL KNOWLEDGE ENGINE
+            LOGGED IN AS: {st.session_state.username.upper()}
         </p>
         """,
         unsafe_allow_html=True
     )
+
+    if st.button("🚪 Log Out", use_container_width=True):
+        st.session_state.logged_in = False
+        st.session_state.username = None
+        if "chats" in st.session_state:
+            del st.session_state.chats
+        if "active_chat_id" in st.session_state:
+            del st.session_state.active_chat_id
+        st.rerun()
 
     st.markdown("---")
     st.markdown("### 💬 CHAT HISTORY")
@@ -358,7 +420,7 @@ with st.sidebar:
 
 
 # -------------------------------------------------------------------------
-# 8. MAIN HEADER
+# 11. MAIN HEADER
 # -------------------------------------------------------------------------
 st.markdown("<div class='brand-title'>gyan</div>", unsafe_allow_html=True)
 st.markdown(
@@ -378,7 +440,7 @@ st.markdown(
 
 
 # -------------------------------------------------------------------------
-# 9. ACTIVE CHAT & HISTORY
+# 12. ACTIVE CHAT & HISTORY
 # -------------------------------------------------------------------------
 active_chat = get_active_chat()
 
@@ -388,7 +450,7 @@ for message in active_chat["messages"]:
 
 
 # -------------------------------------------------------------------------
-# 10. CHAT INPUT
+# 13. CHAT INPUT
 # -------------------------------------------------------------------------
 if prompt := st.chat_input("Ask an exam derivation, technical problem, or chat with your coach..."):
     active_chat["messages"].append({

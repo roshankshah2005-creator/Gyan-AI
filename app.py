@@ -170,11 +170,12 @@ for message in active_chat["messages"]:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Taskbar Upload Control (Plus Popover right above the chat input)
+# Taskbar Upload Control (Plus Popover)
 with st.popover("➕ Add Document"):
     uploaded_file = st.file_uploader("Upload PDF or TXT resource", type=["pdf", "txt"], key="taskbar_uploader")
     if uploaded_file is not None:
         try:
+            uploaded_file.seek(0)
             file_ext = uploaded_file.name.split(".")[-1].lower()
             extracted = ""
             if file_ext == "pdf":
@@ -186,9 +187,12 @@ with st.popover("➕ Add Document"):
             elif file_ext == "txt":
                 extracted = uploaded_file.read().decode("utf-8")
             
-            st.session_state.document_text = extracted
-            st.session_state.file_name = uploaded_file.name
-            st.success(f"Successfully loaded: {uploaded_file.name}")
+            if extracted.strip():
+                st.session_state.document_text = extracted
+                st.session_state.file_name = uploaded_file.name
+                st.success(f"Successfully read {len(extracted)} characters from {uploaded_file.name}!")
+            else:
+                st.warning("Could not extract text. Make sure your PDF contains selectable text (not scanned images).")
         except Exception as e:
             st.error(f"Error parsing file: {e}")
 
@@ -196,7 +200,7 @@ with st.popover("➕ Add Document"):
 if st.session_state.file_name:
     col_badge1, col_badge2 = st.columns([0.85, 0.15])
     with col_badge1:
-        st.info(f"📎 Attached Document Context: **{st.session_state.file_name}**")
+        st.info(f"📎 Attached Document: **{st.session_state.file_name}** ({len(st.session_state.document_text)} chars loaded)")
     with col_badge2:
         if st.button("❌ Remove", key="remove_doc_btn", use_container_width=True):
             st.session_state.document_text = ""
@@ -216,17 +220,17 @@ if prompt := st.chat_input("Ask a question or request a summary of your document
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Build payload with document context injected if provided
+    # Build payload with document context injected directly into the user message for absolute reliability
     messages_payload = [{"role": "system", "content": active_system_instruction}]
     
-    if st.session_state.document_text:
-        messages_payload.append({
-            "role": "system", 
-            "content": f"Here is the reference document content provided by the user:\n{st.session_state.document_text}"
-        })
-    
-    for msg in active_chat["messages"]:
-        messages_payload.append({"role": msg["role"], "content": msg["content"]})
+    # Format chat history and inject document text into the latest user prompt if available
+    for i, msg in enumerate(active_chat["messages"]):
+        content = msg["content"]
+        # If it's the very last user message and we have a document loaded, attach it explicitly
+        if i == len(active_chat["messages"]) - 1 and msg["role"] == "user" and st.session_state.document_text:
+            content = f"{content}\n\n[Reference Document Context Provided:\n{st.session_state.document_text}]"
+        
+        messages_payload.append({"role": msg["role"], "content": content})
 
     with st.chat_message("assistant"):
         message_placeholder = st.empty()

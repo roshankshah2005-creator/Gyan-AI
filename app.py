@@ -14,7 +14,7 @@ st.set_page_config(
 )
 
 # -------------------------------------------------------------------------
-# 2. CLIENT INITIALIZATION (Using Groq - No GCP/JWT Headaches)
+# 2. CLIENT INITIALIZATION (Using Groq)
 # -------------------------------------------------------------------------
 api_key = None
 try:
@@ -31,7 +31,6 @@ if not api_key:
     st.stop()
 
 try:
-    # Clean initialization using a normal, standard API key
     client = Groq(api_key=api_key)
 except Exception as e:
     st.error(f"Failed to initialize Groq client: {e}")
@@ -104,7 +103,6 @@ if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc...
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Build messages payload for Groq
     messages_payload = [{"role": "system", "content": active_system_instruction}]
     
     if document_text:
@@ -119,7 +117,6 @@ if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc...
         
         response_text = None
         try:
-            # Using Llama 3.3 70B on Groq (extremely smart and fast)
             chat_completion = client.chat.completions.create(
                 model="openai/gpt-oss-20b",
                 messages=messages_payload,

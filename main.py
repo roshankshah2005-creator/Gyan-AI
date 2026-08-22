@@ -178,7 +178,6 @@ def clean_math_syntax(text):
     )
 
     # Fix broken table rows where math equations introduced unescaped line breaks
-    # Removes hard line breaks inside table cells (| ... |)
     def fix_table_row(match):
         row = match.group(0)
         return row.replace('\n', ' ')
@@ -290,7 +289,9 @@ with st.sidebar:
             "Strict Professor",
             "Senior Tech Lead",
             "Data Science Mentor",
-            "Creative Director"
+            "Creative Director",
+            "Research (Quick Mode)",
+            "Research (Deep Mode)"
         ],
         label_visibility="collapsed"
     )
@@ -318,6 +319,16 @@ with st.sidebar:
         ),
         "Creative Director": (
             "You are a Creative Director. Offer sharp typography feedback, color palette advice, design layouts, branding guidance, and creative direction for visual projects."
+        ),
+        "Research (Quick Mode)": (
+            "You are an agile Research Assistant operating in Quick Mode. "
+            "Provide rapid, concise summaries of academic papers, core methodologies, high-level findings, and abstract-level overviews. "
+            "Keep answers punchy, structured, and easy to skim without overly dense proofs unless requested."
+        ),
+        "Research (Deep Mode)": (
+            "You are an Advanced Senior Researcher operating in Deep Mode. "
+            "Provide exhaustive academic analyses, rigorous theoretical breakdowns, critical methodology evaluations, mathematical formulations, and structured literature synthesis. "
+            "Use proper LaTeX formatting ($...$ and $$...$$) and avoid placing complex equations inside tables."
         )
     }
 

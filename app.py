@@ -1,10 +1,11 @@
 import os
+import uuid
 import streamlit as st
 from groq import Groq
 from pypdf import PdfReader
 
 # -------------------------------------------------------------------------
-# 1. PAGE CONFIGURATION
+# 1. PAGE CONFIGURATION & STYLING
 # -------------------------------------------------------------------------
 st.set_page_config(
     page_title="Gyan AI",
@@ -12,6 +13,16 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Hide Streamlit default header, footer, and menu
+hide_streamlit_style = """
+<style>
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
+</style>
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 # -------------------------------------------------------------------------
 # 2. CLIENT INITIALIZATION (Using Groq)
@@ -37,9 +48,47 @@ except Exception as e:
     st.stop()
 
 # -------------------------------------------------------------------------
-# 3. SIDEBAR CONFIGURATION & PERSONAS
+# 3. CHAT SESSIONS STATE MANAGEMENT
+# -------------------------------------------------------------------------
+if "chats" not in st.session_state:
+    initial_id = f"chat_{uuid.uuid4().hex[:6]}"
+    st.session_state.chats = [{"id": initial_id, "title": "New Chat", "messages": []}]
+
+if "active_chat_id" not in st.session_state:
+    st.session_state.active_chat_id = st.session_state.chats[0]["id"]
+
+# Helper function to get current active chat dictionary
+def get_active_chat():
+    for chat in st.session_state.chats:
+        if chat["id"] == st.session_state.active_chat_id:
+            return chat
+    # Fallback if ID not found
+    return st.session_state.chats[0]
+
+# -------------------------------------------------------------------------
+# 4. SIDEBAR CONFIGURATION & CHAT HISTORY
 # -------------------------------------------------------------------------
 with st.sidebar:
+    st.markdown("### 💬 CHAT HISTORY")
+    
+    if st.button("➕ New Chat", use_container_width=True):
+        new_id = f"chat_{uuid.uuid4().hex[:6]}"
+        st.session_state.chats.insert(0, {"id": new_id, "title": "New Chat", "messages": []})
+        st.session_state.active_chat_id = new_id
+        st.rerun()
+
+    st.markdown("---")
+    
+    # Display saved chats list
+    for chat in st.session_state.chats:
+        is_active = chat["id"] == st.session_state.active_chat_id
+        label = f"📌 {chat['title']}" if is_active else chat["title"]
+        
+        if st.button(label, key=f"btn_{chat['id']}", use_container_width=True):
+            st.session_state.active_chat_id = chat["id"]
+            st.rerun()
+
+    st.markdown("---")
     st.markdown("### 🤖 AI PERSONA")
     persona_choice = st.selectbox(
         "Choose Persona",
@@ -81,34 +130,36 @@ with st.sidebar:
         except Exception as e:
             st.error(f"Error reading document: {e}")
 
-    st.markdown("---")
-    if st.button("➕ New Chat", use_container_width=True):
-        st.session_state.messages = []
-        st.rerun()
-
 # -------------------------------------------------------------------------
-# 4. CHAT INTERFACE & STATE MANAGEMENT
+# 5. CHAT INTERFACE & MESSAGE HANDLING
 # -------------------------------------------------------------------------
 st.markdown("<h1 style='text-align: center; color: #a29bfe;'>GYAN</h1>", unsafe_allow_html=True)
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+active_chat = get_active_chat()
 
-for message in st.session_state.messages:
+# Render existing messages for the active chat
+for message in active_chat["messages"]:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
 if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
+    # Append user prompt to current chat
+    active_chat["messages"].append({"role": "user", "content": prompt})
+    
+    # Auto-update title if it's the first message
+    if active_chat["title"] == "New Chat":
+        active_chat["title"] = prompt[:25] + ("..." if len(prompt) > 25 else "")
+
     with st.chat_message("user"):
         st.markdown(prompt)
 
+    # Build messages payload for Groq
     messages_payload = [{"role": "system", "content": active_system_instruction}]
     
     if document_text:
         messages_payload.append({"role": "system", "content": f"Context from uploaded document:\n{document_text}"})
     
-    for msg in st.session_state.messages:
+    for msg in active_chat["messages"]:
         messages_payload.append({"role": msg["role"], "content": msg["content"]})
 
     with st.chat_message("assistant"):
@@ -127,15 +178,7 @@ if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc...
             response_text = f"API Error Encountered: {e}"
         
         message_placeholder.markdown(response_text)
-        st.session_state.messages.append({"role": "assistant", "content": response_text})
-# -------------------------------------------------------------------------
-# HIDE STREAMLIT DEFAULT UI & HEADER
-# -------------------------------------------------------------------------
-hide_streamlit_style = """
-<style>
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-header {visibility: hidden;}
-</style>
-"""
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+        active_chat["messages"].append({"role": "assistant", "content": response_text})
+        
+        # Rerun to refresh sidebar chat list titles smoothly
+        st.rerun()

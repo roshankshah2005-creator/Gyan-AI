@@ -15,7 +15,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Hide Streamlit default header, footer, and menu
 hide_streamlit_style = """
 <style>
 #MainMenu {visibility: hidden;}
@@ -81,7 +80,6 @@ if "chats" not in st.session_state:
 if "active_chat_id" not in st.session_state:
     st.session_state.active_chat_id = st.session_state.chats[0]["id"]
 
-# Persistent document upload states
 if "document_text" not in st.session_state:
     st.session_state.document_text = ""
 if "file_name" not in st.session_state:
@@ -94,7 +92,7 @@ def get_active_chat():
     return st.session_state.chats[0]
 
 # -------------------------------------------------------------------------
-# 5. SIDEBAR: CHAT HISTORY & PERSONAS ONLY
+# 5. SIDEBAR: CHAT HISTORY & PERSONAS
 # -------------------------------------------------------------------------
 with st.sidebar:
     st.markdown("### 💬 CHAT HISTORY")
@@ -160,7 +158,7 @@ with st.sidebar:
     active_system_instruction = system_instructions.get(persona_choice, "You are Gyan, a helpful AI assistant.")
 
 # -------------------------------------------------------------------------
-# 6. MAIN CHAT INTERFACE & TASKBAR DOCUMENT POPUP
+# 6. MAIN CHAT INTERFACE & SAFE DOCUMENT UPLOAD
 # -------------------------------------------------------------------------
 st.markdown("<h1 style='text-align: center; color: #a29bfe;'>GYAN</h1>", unsafe_allow_html=True)
 
@@ -170,9 +168,9 @@ for message in active_chat["messages"]:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Taskbar Upload Control (Plus Popover)
-with st.popover("➕ Add Document"):
-    uploaded_file = st.file_uploader("Upload PDF or TXT resource", type=["pdf", "txt"], key="taskbar_uploader")
+# Safe Upload Expander
+with st.expander("➕ Add Document Resource"):
+    uploaded_file = st.file_uploader("Upload PDF or TXT", type=["pdf", "txt"], key="taskbar_uploader")
     if uploaded_file is not None:
         try:
             uploaded_file.seek(0)
@@ -188,19 +186,24 @@ with st.popover("➕ Add Document"):
                 extracted = uploaded_file.read().decode("utf-8")
             
             if extracted.strip():
+                # Safe character cap set to 3,500 (~800 tokens) to stay well within Groq free-tier TPM limits
+                if len(extracted) > 3500:
+                    extracted = extracted[:3500]
+                    st.toast("⚠️ Document optimized for fast processing (first 3,500 characters loaded).", icon="⚡")
+                
                 st.session_state.document_text = extracted
                 st.session_state.file_name = uploaded_file.name
-                st.success(f"Successfully read {len(extracted)} characters from {uploaded_file.name}!")
+                st.success(f"Successfully loaded {uploaded_file.name}!")
             else:
                 st.warning("Could not extract text. Make sure your PDF contains selectable text (not scanned images).")
         except Exception as e:
             st.error(f"Error parsing file: {e}")
 
-# Display active attachment badge if a file is currently loaded
+# Display active attachment badge if loaded
 if st.session_state.file_name:
     col_badge1, col_badge2 = st.columns([0.85, 0.15])
     with col_badge1:
-        st.info(f"📎 Attached Document: **{st.session_state.file_name}** ({len(st.session_state.document_text)} chars loaded)")
+        st.info(f"📎 Active Context: **{st.session_state.file_name}**")
     with col_badge2:
         if st.button("❌ Remove", key="remove_doc_btn", use_container_width=True):
             st.session_state.document_text = ""
@@ -208,10 +211,8 @@ if st.session_state.file_name:
             st.rerun()
 
 if prompt := st.chat_input("Ask a question or request a summary of your document..."):
-    # Append user prompt
     active_chat["messages"].append({"role": "user", "content": prompt})
     
-    # Auto-title chat
     if active_chat["title"] == "New Chat":
         active_chat["title"] = prompt[:25] + ("..." if len(prompt) > 25 else "")
 
@@ -220,17 +221,17 @@ if prompt := st.chat_input("Ask a question or request a summary of your document
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Build payload with document context injected directly into the user message for absolute reliability
+    # Build clean messages payload adhering to Groq token limits
     messages_payload = [{"role": "system", "content": active_system_instruction}]
     
-    # Format chat history and inject document text into the latest user prompt if available
-    for i, msg in enumerate(active_chat["messages"]):
-        content = msg["content"]
-        # If it's the very last user message and we have a document loaded, attach it explicitly
-        if i == len(active_chat["messages"]) - 1 and msg["role"] == "user" and st.session_state.document_text:
-            content = f"{content}\n\n[Reference Document Context Provided:\n{st.session_state.document_text}]"
-        
-        messages_payload.append({"role": msg["role"], "content": content})
+    if st.session_state.document_text:
+        messages_payload.append({
+            "role": "system", 
+            "content": f"Reference Document Context Provided by User:\n{st.session_state.document_text}"
+        })
+    
+    for msg in active_chat["messages"]:
+        messages_payload.append({"role": msg["role"], "content": msg["content"]})
 
     with st.chat_message("assistant"):
         message_placeholder = st.empty()

@@ -116,9 +116,28 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------------
-# 4. CHAT STORAGE
+# 4. IP-BASED CHAT STORAGE
 # -------------------------------------------------------------------------
-CHATS_FILE = "chats.json"
+def get_user_ip():
+    try:
+        # Streamlit header check for proxy/cloud environments
+        headers = st.context.headers
+        forwarded_ip = headers.get("X-Forwarded-For")
+        if forwarded_ip:
+            # X-Forwarded-For can contain multiple comma-separated IPs; take the first one
+            return forwarded_ip.split(",")[0].strip()
+        
+        real_ip = headers.get("X-Real-Ip")
+        if real_ip:
+            return real_ip.strip()
+    except Exception:
+        pass
+    return "local_user"
+
+# Generate a safe filename based on the user's IP address
+raw_ip = get_user_ip()
+safe_ip = re.sub(r'[^a-zA-Z0-9]', '_', raw_ip)
+CHATS_FILE = f"chats_{safe_ip}.json"
 
 
 def load_chats():
@@ -199,21 +218,6 @@ def clean_math_syntax(text):
 # -------------------------------------------------------------------------
 if "chats" not in st.session_state:
     st.session_state.chats = load_chats()
-
-# Ensure a brand new browser session always starts with a fresh empty chat page
-if "initialized_session" not in st.session_state:
-    st.session_state.initialized_session = True
-    new_id = f"chat_{uuid.uuid4().hex[:6]}"
-    st.session_state.chats.insert(
-        0,
-        {
-            "id": new_id,
-            "title": "New Chat",
-            "messages": []
-        }
-    )
-    st.session_state.active_chat_id = new_id
-    save_chats(st.session_state.chats)
 
 if "active_chat_id" not in st.session_state:
     st.session_state.active_chat_id = st.session_state.chats[0]["id"]

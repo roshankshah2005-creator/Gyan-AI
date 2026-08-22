@@ -4,23 +4,37 @@ import json
 import streamlit as st
 from groq import Groq
 
-# -------------------------------------------------------------------------
-# 1. PAGE CONFIGURATION & STYLING
-# -------------------------------------------------------------------------
-st.set_page_config(
-    page_title="Gyan AI",
-    page_icon="🧠",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
 hide_streamlit_style = """
 <style>
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 header {visibility: hidden;}
+
+/* Hide file uploaders */
+[data-testid="stFileUploader"] {
+    display: none !important;
+}
+
+/* Hide attachment/document controls in chat input */
+[data-testid="stChatInput"] [data-testid="stChatInputFileButton"] {
+    display: none !important;
+}
+
+/* Alternative selectors for different Streamlit versions */
+[data-testid="stChatInput"] button[aria-label*="Attach"] {
+    display: none !important;
+}
+
+[data-testid="stChatInput"] button[aria-label*="file" i] {
+    display: none !important;
+}
+
+[data-testid="stChatInput"] button[aria-label*="document" i] {
+    display: none !important;
+}
 </style>
 """
+
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 # -------------------------------------------------------------------------

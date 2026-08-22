@@ -158,65 +158,54 @@ with st.sidebar:
     active_system_instruction = system_instructions.get(persona_choice, "You are Gyan, a helpful AI assistant.")
 
 # -------------------------------------------------------------------------
-# 6. MODAL DIALOG FOR DOCUMENT UPLOAD (Prevents Dimming)
+# 6. MAIN CHAT INTERFACE & ALWAYS-VISIBLE DOCUMENT UPLOADER
 # -------------------------------------------------------------------------
-@st.dialog("📄 Upload Document Resource")
-def upload_document_dialog():
-    st.write("Upload a PDF or TXT file to provide context for your questions.")
-    uploaded_file = st.file_uploader("Choose a file", type=["pdf", "txt"])
-    
-    if uploaded_file is not None:
-        try:
-            uploaded_file.seek(0)
-            file_ext = uploaded_file.name.split(".")[-1].lower()
-            extracted = ""
-            if file_ext == "pdf":
-                reader = PdfReader(uploaded_file)
-                for page in reader.pages:
-                    text = page.extract_text()
-                    if text:
-                        extracted += text + "\n"
-            elif file_ext == "txt":
-                extracted = uploaded_file.read().decode("utf-8")
-            
-            if extracted.strip():
-                if len(extracted) > 3000:
-                    extracted = extracted[:3000]
-                
-                st.session_state.document_text = extracted
-                st.session_state.file_name = uploaded_file.name
-                st.success(f"Successfully loaded {uploaded_file.name}!")
-                if st.button("Done"):
-                    st.rerun()
-            else:
-                st.warning("Could not extract text. Make sure your PDF contains selectable text.")
-        except Exception as e:
-            st.error(f"Error parsing file: {e}")
-
-# -------------------------------------------------------------------------
-# 7. MAIN CHAT INTERFACE
-# -------------------------------------------------------------------------
-st.markdown("<h1 style='text-align: center; color: #a29bfe;'>GYAN</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center; color: #a29bfe; margin-bottom: 0px;'>GYAN</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #64748b; font-size: 14px; margin-bottom: 20px;'>Your Multi-Persona AI Study & Tech Companion</p>", unsafe_allow_html=True)
 
 active_chat = get_active_chat()
 
-# Action bar above chat for uploading documents cleanly
-col_btn, col_info = st.columns([2, 8])
-with col_btn:
-    if st.button("➕ Add Document", use_container_width=True):
-        upload_document_dialog()
+# Clean, always-visible Document Upload Box (Will never dim your search bar)
+with st.container():
+    col_up, col_info = st.columns([1, 2])
+    with col_up:
+        uploaded_file = st.file_uploader("Upload PDF or TXT", type=["pdf", "txt"], key="main_uploader")
+    with col_info:
+        if uploaded_file is not None:
+            try:
+                uploaded_file.seek(0)
+                file_ext = uploaded_file.name.split(".")[-1].lower()
+                extracted = ""
+                if file_ext == "pdf":
+                    reader = PdfReader(uploaded_file)
+                    for page in reader.pages:
+                        text = page.extract_text()
+                        if text:
+                            extracted += text + "\n"
+                elif file_ext == "txt":
+                    extracted = uploaded_file.read().decode("utf-8")
+                
+                if extracted.strip():
+                    if len(extracted) > 3000:
+                        extracted = extracted[:3000]
+                    st.session_state.document_text = extracted
+                    st.session_state.file_name = uploaded_file.name
+            except Exception as e:
+                st.error(f"Error parsing file: {e}")
 
-# Display active attachment badge if loaded
-if st.session_state.file_name:
-    col_badge1, col_badge2 = st.columns([0.85, 0.15])
-    with col_badge1:
-        st.info(f"📎 Active Context: **{st.session_state.file_name}**")
-    with col_badge2:
-        if st.button("❌ Remove", key="remove_doc_btn", use_container_width=True):
-            st.session_state.document_text = ""
-            st.session_state.file_name = None
-            st.rerun()
+        # Status badge & removal option
+        if st.session_state.file_name:
+            st.success(f"📎 Active Resource: **{st.session_state.file_name}**")
+            if st.button("❌ Remove Document", key="remove_doc_btn"):
+                st.session_state.document_text = ""
+                st.session_state.file_name = None
+                st.rerun()
+        else:
+            st.caption("ℹ️ Upload a PDF or TXT above to give context to your questions.")
 
+st.markdown("---")
+
+# Render chat messages
 for message in active_chat["messages"]:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])

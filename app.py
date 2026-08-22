@@ -14,7 +14,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Hide Streamlit default header, footer, and menu
 hide_streamlit_style = """
 <style>
 #MainMenu {visibility: hidden;}
@@ -57,12 +56,10 @@ if "chats" not in st.session_state:
 if "active_chat_id" not in st.session_state:
     st.session_state.active_chat_id = st.session_state.chats[0]["id"]
 
-# Helper function to get current active chat dictionary
 def get_active_chat():
     for chat in st.session_state.chats:
         if chat["id"] == st.session_state.active_chat_id:
             return chat
-    # Fallback if ID not found
     return st.session_state.chats[0]
 
 # -------------------------------------------------------------------------
@@ -93,6 +90,7 @@ with st.sidebar:
     persona_choice = st.selectbox(
         "Choose Persona",
         [
+            "Strict Professor",
             "Senior Tech Lead", 
             "Data Science Mentor", 
             "Exam Prep Coach", 
@@ -102,6 +100,12 @@ with st.sidebar:
     )
     
     system_instructions = {
+        "Strict Professor": (
+            "You are a notoriously strict, old-school university professor holding a viva and grading tests. "
+            "Do not accept vague answers or sugarcoat feedback. When the student answers a viva question or submits test work, "
+            "critique their logic brutally, point out flaws, and assign a strict numeric score out of 10 with detailed remarks. "
+            "Never give a 10/10 unless the answer is flawless."
+        ),
         "Senior Tech Lead": "You are an expert Senior Tech Lead. Provide clean, efficient code snippets, rigorous code reviews, and robust software architecture guidance.",
         "Data Science Mentor": "You are a Data Science Mentor. Help with machine learning algorithms, pandas dataframes, scikit-learn pipelines, statistics, and data cleaning workflows.",
         "Exam Prep Coach": "You are an academic Exam Prep Coach. Break down tough engineering concepts, create structured study guides, summarize chapters, and give high-yield revision notes.",
@@ -137,7 +141,6 @@ st.markdown("<h1 style='text-align: center; color: #a29bfe;'>GYAN</h1>", unsafe_
 
 active_chat = get_active_chat()
 
-# Render existing messages for the active chat
 for message in active_chat["messages"]:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
@@ -153,7 +156,7 @@ if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc...
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Build messages payload for Groq
+    
     messages_payload = [{"role": "system", "content": active_system_instruction}]
     
     if document_text:
@@ -180,5 +183,4 @@ if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc...
         message_placeholder.markdown(response_text)
         active_chat["messages"].append({"role": "assistant", "content": response_text})
         
-        # Rerun to refresh sidebar chat list titles smoothly
         st.rerun()

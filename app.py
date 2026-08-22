@@ -28,34 +28,23 @@ except Exception as e:
     st.stop()
 
 # -------------------------------------------------------------------------
-# 2. CLIENT INITIALIZATION (Direct AI Studio Mode for AQ Keys)
+# 2. VERTEX AI CLIENT INITIALIZATION (Service Account Mode)
 # -------------------------------------------------------------------------
-# Clean background GCP variables so the SDK doesn't get confused
-for gcp_var in ["GOOGLE_APPLICATION_CREDENTIALS", "GOOGLE_CLOUD_PROJECT", "GOOGLE_CLOUD_REGION"]:
-    if gcp_var in os.environ:
-        del os.environ[gcp_var]
+import os
+from google import genai
+from google.genai import types
 
-api_key = None
+# Force Vertex AI backend to talk to aiplatform.googleapis.com instead of AI Studio
+os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "true"
+os.environ["GOOGLE_CLOUD_PROJECT"] = "gen-lang-client-0656156962"
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "service_account.json"
+
+# Initialize client WITHOUT an api_key parameter so it uses the service account credentials
 try:
-    if "GEMINI_API_KEY" in st.secrets:
-        api_key = str(st.secrets["GEMINI_API_KEY"]).strip()
-except Exception:
-    pass
-
-if not api_key:
-    api_key = os.getenv("GEMINI_API_KEY", "").strip()
-
-if not api_key:
-    st.error("⚠️ GEMINI_API_KEY is missing. Please configure it in your Streamlit Secrets.")
-    st.stop()
-
-# Initialize client cleanly — requires `google-genai` package to be up-to-date
-try:
-    client = genai.Client(api_key=api_key)
+    client = genai.Client()
 except Exception as e:
-    st.error(f"Failed to initialize Gemini client: {e}")
+    st.error(f"Failed to initialize Vertex AI client: {e}")
     st.stop()
-
 # -------------------------------------------------------------------------
 # 3. SIDEBAR CONFIGURATION & PERSONAS
 # -------------------------------------------------------------------------

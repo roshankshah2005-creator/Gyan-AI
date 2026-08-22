@@ -6,7 +6,7 @@ from google.genai import types
 from pypdf import PdfReader
 
 # -------------------------------------------------------------------------
-# 1. PAGE CONFIGURATION
+# 1. PAGE CONFIGURATION & SERVICE ACCOUNT AUTHENTICATION
 # -------------------------------------------------------------------------
 st.set_page_config(
     page_title="Gyan AI",
@@ -14,6 +14,19 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "service_account.json"
+
+try:
+    client = genai.Client(
+        vertexai=True,
+        project="gen-lang-client-0656156962", 
+        location="us-central1"
+    )
+except Exception as e:
+    st.error(f"Failed to initialize client via Service Account: {e}")
+    st.stop()
+Switching to the servic
 
 # -------------------------------------------------------------------------
 # 2. CLIENT INITIALIZATION (Direct AI Studio Mode for AQ Keys)

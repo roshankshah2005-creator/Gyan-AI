@@ -420,19 +420,21 @@ with st.sidebar:
 
 
 # -------------------------------------------------------------------------
-# 11. MAIN HEADER
+# 11. MAIN HEADER WITH PERSONALIZED GREETING
 # -------------------------------------------------------------------------
 st.markdown("<div class='brand-title'>gyan</div>", unsafe_allow_html=True)
+display_name = st.session_state.username.capitalize()
 st.markdown(
-    """
+    f"""
     <p style='
         text-align:center;
         color:#a0aec0;
-        font-size:13px;
+        font-size:14px;
         letter-spacing:1px;
+        margin-top: 5px;
         margin-bottom:25px;
     '>
-        Your Ultimate Semester Exam & Technical Companion
+        Hello, {display_name}! Your Ultimate Semester Exam & Technical Companion
     </p>
     """,
     unsafe_allow_html=True

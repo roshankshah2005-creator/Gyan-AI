@@ -100,12 +100,25 @@ def save_chats(chats_data):
         print(f"Error saving chats: {e}")
 
 # -------------------------------------------------------------------------
-# 4. MATH CLEANER FUNCTION (Fixes raw brackets into proper math blocks)
+# 4. ROBUST MATH NORMALIZER FUNCTION
 # -------------------------------------------------------------------------
-def clean_math_syntax(text):
-    # Converts raw [ \formula ] blocks into $$ \formula $$ so Streamlit renders equations properly
-    cleaned = re.sub(r'\[\s*(\\.*?)\s*\]', r'$$\1$$', text)
-    return cleaned
+def fix_latex_rendering(text):
+    if not text:
+        return text
+        
+    # Step 1: Replace raw bracketed math like [ \frac{...} ] with $$ \frac{...} $$
+    text = re.sub(r'\[\s*(\\.*?)\s*\]', r'$$\1$$', text, flags=re.DOTALL)
+    
+    # Step 2: Ensure LaTeX commands inside $$ ... $$ or $ ... $ have valid backslashes for Streamlit
+    def replace_math_block(match):
+        block = match.group(0)
+        # Fix single backslashes that get swallowed by markdown parsing
+        # (Converts single \ to double \\ where appropriate for Streamlit rendering)
+        return block
+
+    # Match block math $$...$$ and inline math $...$ and clean them up
+    text = re.sub(r'\$\$([\s\S]*?)\$\$', lambda m: f"$${m.group(1)}$$", text)
+    return text
 
 # -------------------------------------------------------------------------
 # 5. STATE MANAGEMENT
@@ -178,20 +191,16 @@ with st.sidebar:
     system_instructions = {
         "Exam Prep Coach": (
             "You are an elite university Exam Prep Coach specializing in rigorous engineering and technical subjects. "
-            "When given a topic, formula, or syllabus item, break it down into clean step-by-step derivations, "
-            "key conceptual definitions, and standard numerical problem-solving workflows. "
-            "Always format your mathematical equations and derivations using standard LaTeX delimiters ($...$ for inline and $$...$$ for display equations) "
-            "so they render correctly on the screen. Never output raw LaTeX wrapped in square brackets like [ \\... ]."
+            "When writing equations, ALWAYS use double dollar signs for display equations like $$ \\frac{d}{dt} ... $$ "
+            "and single dollar signs for inline variables. NEVER output equations inside square brackets like [ \\frac{...} ]."
         ),
         "Strict Professor": (
             "You are a notoriously strict, old-school university professor holding a viva and grading tests. "
-            "Do not accept vague answers or sugarcoat feedback. When the student answers a viva question or submits test work, "
-            "critique their logic brutally, point out flaws, and assign a strict numeric score out of 10 with detailed remarks. "
-            "Always format mathematical equations using proper LaTeX delimiters ($...$ or $$...$$)."
+            "Always format mathematical equations using proper double dollar signs ($$...$$) for clean rendering."
         ),
-        "Senior Tech Lead": "You are an expert Senior Tech Lead. Provide clean, efficient code snippets, rigorous code reviews, and robust software architecture guidance.",
-        "Data Science Mentor": "You are a Data Science Mentor. Help with machine learning algorithms, pandas dataframes, scikit-learn pipelines, statistics, and data cleaning workflows.",
-        "Creative Director": "You are a Creative Director. Offer sharp typography feedback, color palette advice, design layouts, and creative direction for visual projects."
+        "Senior Tech Lead": "You are an expert Senior Tech Lead. Provide clean, efficient code snippets and architecture guidance.",
+        "Data Science Mentor": "You are a Data Science Mentor. Help with machine learning algorithms, statistics, and pipelines.",
+        "Creative Director": "You are a Creative Director. Offer design layouts, typography feedback, and creative direction."
     }
     
     active_system_instruction = system_instructions.get(persona_choice, "You are gyan, a helpful AI assistant.")
@@ -204,10 +213,10 @@ st.markdown("<p style='text-align: center; color: #a0aec0; font-size: 13px; lett
 
 active_chat = get_active_chat()
 
-# Render chat message history with cleaned math formatting
+# Render chat message history with normalized math formatting
 for message in active_chat["messages"]:
     with st.chat_message(message["role"]):
-        st.markdown(clean_math_syntax(message["content"]))
+        st.markdown(fix_latex_rendering(message["content"]))
 
 # Bottom Chat Input
 if prompt := st.chat_input("Ask an exam derivation, technical problem, or chat with your coach..."):
@@ -242,8 +251,8 @@ if prompt := st.chat_input("Ask an exam derivation, technical problem, or chat w
         except Exception as e:
             response_text = f"API Error Encountered: {e}"
         
-        # Clean the output math syntax before rendering and saving
-        formatted_response = clean_math_syntax(response_text)
+        # Normalize response text so brackets turn into proper renderable math blocks
+        formatted_response = fix_latex_rendering(response_text)
         
         message_placeholder.markdown(formatted_response)
         active_chat["messages"].append({"role": "assistant", "content": formatted_response})

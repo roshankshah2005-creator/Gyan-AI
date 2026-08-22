@@ -121,7 +121,7 @@ if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc...
         try:
             # Using Llama 3.3 70B on Groq (extremely smart and fast)
             chat_completion = client.chat.completions.create(
-                model="llama-3.1-8b-instant",
+                model="openai/gpt-oss-20b",
                 messages=messages_payload,
                 temperature=0.7,
             )

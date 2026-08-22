@@ -81,12 +81,6 @@ if "chats" not in st.session_state:
 if "active_chat_id" not in st.session_state:
     st.session_state.active_chat_id = st.session_state.chats[0]["id"]
 
-# Initialize session state variables for file handling
-if "attached_file_name" not in st.session_state:
-    st.session_state.attached_file_name = None
-if "attached_file_text" not in st.session_state:
-    st.session_state.attached_file_text = ""
-
 def get_active_chat():
     for chat in st.session_state.chats:
         if chat["id"] == st.session_state.active_chat_id:
@@ -94,7 +88,7 @@ def get_active_chat():
     return st.session_state.chats[0]
 
 # -------------------------------------------------------------------------
-# 5. SIDEBAR CONFIGURATION (History & Personas Only)
+# 5. SIDEBAR CONFIGURATION (History, Document Upload & Personas)
 # -------------------------------------------------------------------------
 with st.sidebar:
     st.markdown("### 💬 CHAT HISTORY")
@@ -103,8 +97,6 @@ with st.sidebar:
         new_id = f"chat_{uuid.uuid4().hex[:6]}"
         st.session_state.chats.insert(0, {"id": new_id, "title": "New Chat", "messages": []})
         st.session_state.active_chat_id = new_id
-        st.session_state.attached_file_name = None
-        st.session_state.attached_file_text = ""
         save_chats(st.session_state.chats)
         st.rerun()
 
@@ -118,8 +110,6 @@ with st.sidebar:
         with col1:
             if st.button(label, key=f"btn_{chat['id']}", use_container_width=True):
                 st.session_state.active_chat_id = chat["id"]
-                st.session_state.attached_file_name = None
-                st.session_state.attached_file_text = ""
                 st.rerun()
         with col2:
             if st.button("🗑️", key=f"del_{chat['id']}", use_container_width=True, help="Delete chat"):
@@ -131,6 +121,26 @@ with st.sidebar:
                     st.session_state.active_chat_id = st.session_state.chats[0]["id"]
                 save_chats(st.session_state.chats)
                 st.rerun()
+
+    st.markdown("---")
+    st.markdown("### 📄 DOCUMENT CONTEXT")
+    uploaded_file = st.file_uploader("Upload PDF or TXT resource", type=["pdf", "txt"])
+    
+    document_text = ""
+    if uploaded_file is not None:
+        try:
+            file_ext = uploaded_file.name.split(".")[-1].lower()
+            if file_ext == "pdf":
+                reader = PdfReader(uploaded_file)
+                for page in reader.pages:
+                    text = page.extract_text()
+                    if text:
+                        document_text += text + "\n"
+            elif file_ext == "txt":
+                document_text = uploaded_file.read().decode("utf-8")
+            st.success(f"Loaded: {uploaded_file.name}")
+        except Exception as e:
+            st.error(f"Error parsing file: {e}")
 
     st.markdown("---")
     st.markdown("### 🤖 AI PERSONA")
@@ -162,69 +172,19 @@ with st.sidebar:
     active_system_instruction = system_instructions.get(persona_choice, "You are Gyan, a helpful AI assistant.")
 
 # -------------------------------------------------------------------------
-# 6. CHAT INTERFACE & PERSISTENT FILE ATTACHMENT
+# 6. CHAT INTERFACE & MESSAGE HANDLING
 # -------------------------------------------------------------------------
 st.markdown("<h1 style='text-align: center; color: #a29bfe;'>GYAN</h1>", unsafe_allow_html=True)
 
 active_chat = get_active_chat()
 
-# Render existing messages for the active chat
 for message in active_chat["messages"]:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Attachment UI
-with st.expander("📎 Attach PDF, Image, or Text Resource"):
-    uploaded_resource = st.file_uploader(
-        "Upload file", 
-        type=["png", "jpg", "jpeg", "pdf", "txt"], 
-        label_visibility="collapsed"
-    )
-    if uploaded_resource is not None:
-        try:
-            file_extension = uploaded_resource.name.split(".")[-1].lower()
-            extracted_text = ""
-            if file_extension in ["png", "jpg", "jpeg"]:
-                extracted_text = f"[Attached Image File: {uploaded_resource.name}]"
-            elif file_extension == "pdf":
-                reader = PdfReader(uploaded_resource)
-                for page in reader.pages:
-                    text = page.extract_text()
-                    if text:
-                        extracted_text += text + "\n"
-            elif file_extension == "txt":
-                extracted_text = uploaded_resource.read().decode("utf-8")
-            
-            # Save into session state so it persists across UI re-runs
-            st.session_state.attached_file_name = uploaded_resource.name
-            st.session_state.attached_file_text = extracted_text
-        except Exception as e:
-            st.error(f"Error reading file: {e}")
-
-# Show active attachment badge if a file is loaded
-if st.session_state.attached_file_name:
-    col_badge1, col_badge2 = st.columns([0.85, 0.15])
-    with col_badge1:
-        st.success(f"📎 Attached: **{st.session_state.attached_file_name}** (Ready to send with your message)")
-    with col_badge2:
-        if st.button("❌ Remove", use_container_width=True):
-            st.session_state.attached_file_name = None
-            st.session_state.attached_file_text = ""
-            st.rerun()
-
-# Chat Input Box
-if prompt := st.chat_input("Ask a coding problem, exam query, or ask for a summary of your file..."):
-    full_user_input = prompt
-    
-    # Append attached file context if present
-    if st.session_state.attached_file_text:
-        full_user_input = f"{prompt}\n\n[Uploaded Document Content]:\n{st.session_state.attached_file_text}"
-        # Clear attachment after sending
-        st.session_state.attached_file_name = None
-        st.session_state.attached_file_text = ""
-
+if prompt := st.chat_input("Ask a coding problem, exam query, or ask for a summary..."):
     # Append user prompt to current chat
-    active_chat["messages"].append({"role": "user", "content": full_user_input})
+    active_chat["messages"].append({"role": "user", "content": prompt})
     
     # Auto-update title if it's the first message
     if active_chat["title"] == "New Chat":
@@ -233,10 +193,15 @@ if prompt := st.chat_input("Ask a coding problem, exam query, or ask for a summa
     save_chats(st.session_state.chats)
 
     with st.chat_message("user"):
-        st.markdown(full_user_input)
+        st.markdown(prompt)
 
     # Build messages payload for Groq
     messages_payload = [{"role": "system", "content": active_system_instruction}]
+    
+    # Inject document text context if available
+    if document_text:
+        messages_payload.append({"role": "system", "content": f"Here is the reference document content provided by the user:\n{document_text}"})
+    
     for msg in active_chat["messages"]:
         messages_payload.append({"role": msg["role"], "content": msg["content"]})
 

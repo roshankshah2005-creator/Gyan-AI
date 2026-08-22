@@ -3,7 +3,6 @@ import uuid
 import json
 import streamlit as st
 from groq import Groq
-from pypdf import PdfReader
 
 # -------------------------------------------------------------------------
 # 1. PAGE CONFIGURATION & STYLING
@@ -80,11 +79,6 @@ if "chats" not in st.session_state:
 if "active_chat_id" not in st.session_state:
     st.session_state.active_chat_id = st.session_state.chats[0]["id"]
 
-if "document_text" not in st.session_state:
-    st.session_state.document_text = ""
-if "file_name" not in st.session_state:
-    st.session_state.file_name = None
-
 def get_active_chat():
     for chat in st.session_state.chats:
         if chat["id"] == st.session_state.active_chat_id:
@@ -101,8 +95,6 @@ with st.sidebar:
         new_id = f"chat_{uuid.uuid4().hex[:6]}"
         st.session_state.chats.insert(0, {"id": new_id, "title": "New Chat", "messages": []})
         st.session_state.active_chat_id = new_id
-        st.session_state.document_text = ""
-        st.session_state.file_name = None
         save_chats(st.session_state.chats)
         st.rerun()
 
@@ -158,61 +150,23 @@ with st.sidebar:
     active_system_instruction = system_instructions.get(persona_choice, "You are Gyan, a helpful AI assistant.")
 
 # -------------------------------------------------------------------------
-# 6. MAIN CHAT INTERFACE & ALWAYS-VISIBLE DOCUMENT UPLOADER
+# 6. MAIN CHAT INTERFACE
 # -------------------------------------------------------------------------
 st.markdown("<h1 style='text-align: center; color: #a29bfe; margin-bottom: 0px;'>GYAN</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #64748b; font-size: 14px; margin-bottom: 20px;'>Your Multi-Persona AI Study & Tech Companion</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #64748b; font-size: 14px; margin-bottom: 25px;'>Your Multi-Persona AI Study & Tech Companion</p>", unsafe_allow_html=True)
 
 active_chat = get_active_chat()
 
-# Clean, always-visible Document Upload Box (Will never dim your search bar)
-with st.container():
-    col_up, col_info = st.columns([1, 2])
-    with col_up:
-        uploaded_file = st.file_uploader("Upload PDF or TXT", type=["pdf", "txt"], key="main_uploader")
-    with col_info:
-        if uploaded_file is not None:
-            try:
-                uploaded_file.seek(0)
-                file_ext = uploaded_file.name.split(".")[-1].lower()
-                extracted = ""
-                if file_ext == "pdf":
-                    reader = PdfReader(uploaded_file)
-                    for page in reader.pages:
-                        text = page.extract_text()
-                        if text:
-                            extracted += text + "\n"
-                elif file_ext == "txt":
-                    extracted = uploaded_file.read().decode("utf-8")
-                
-                if extracted.strip():
-                    if len(extracted) > 3000:
-                        extracted = extracted[:3000]
-                    st.session_state.document_text = extracted
-                    st.session_state.file_name = uploaded_file.name
-            except Exception as e:
-                st.error(f"Error parsing file: {e}")
-
-        # Status badge & removal option
-        if st.session_state.file_name:
-            st.success(f"📎 Active Resource: **{st.session_state.file_name}**")
-            if st.button("❌ Remove Document", key="remove_doc_btn"):
-                st.session_state.document_text = ""
-                st.session_state.file_name = None
-                st.rerun()
-        else:
-            st.caption("ℹ️ Upload a PDF or TXT above to give context to your questions.")
-
-st.markdown("---")
-
-# Render chat messages
+# Render chat message history
 for message in active_chat["messages"]:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-if prompt := st.chat_input("Ask a question or request a summary of your document..."):
+# Bottom Chat Input
+if prompt := st.chat_input("Ask a coding problem, exam question, or chat with your AI persona..."):
     active_chat["messages"].append({"role": "user", "content": prompt})
     
+    # Auto-title chat based on the first query
     if active_chat["title"] == "New Chat":
         active_chat["title"] = prompt[:25] + ("..." if len(prompt) > 25 else "")
 
@@ -221,15 +175,11 @@ if prompt := st.chat_input("Ask a question or request a summary of your document
     with st.chat_message("user"):
         st.markdown(prompt)
 
+    # Build messages payload
     messages_payload = [{"role": "system", "content": active_system_instruction}]
     
-    if st.session_state.document_text:
-        messages_payload.append({
-            "role": "system", 
-            "content": f"Reference Document Context Provided by User:\n{st.session_state.document_text}"
-        })
-    
-    recent_messages = active_chat["messages"][-6:]
+    # Keep recent messages for fast context handling
+    recent_messages = active_chat["messages"][-10:]
     for msg in recent_messages:
         messages_payload.append({"role": msg["role"], "content": msg["content"]})
 

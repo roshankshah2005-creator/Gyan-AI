@@ -150,7 +150,7 @@ with st.sidebar:
     active_system_instruction = system_instructions.get(persona_choice, "You are Gyan, a helpful AI assistant.")
 
 # -------------------------------------------------------------------------
-# 6. MAIN CHAT INTERFACE
+# 6. MAIN CLEAN CHAT INTERFACE
 # -------------------------------------------------------------------------
 st.markdown("<h1 style='text-align: center; color: #a29bfe; margin-bottom: 0px;'>GYAN</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #64748b; font-size: 14px; margin-bottom: 25px;'>Your Multi-Persona AI Study & Tech Companion</p>", unsafe_allow_html=True)

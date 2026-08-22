@@ -32,10 +32,14 @@ if not api_key:
     st.error("API Key not configured properly on the server.")
     st.stop()
 
+# CRITICAL: Force the SDK to use standard AI Studio API keys, not Vertex AI credentials
 os.environ["GEMINI_API_KEY"] = api_key
-if "GOOGLE_APPLICATION_CREDENTIALS" in os.environ:
-    del os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
-client = genai.Client(api_key=api_key)
+os.environ["GOOGLE_API_KEY"] = api_key
+if "GOOGLE_GENAI_USE_VERTEXAI" in os.environ:
+    del os.environ["GOOGLE_GENAI_USE_VERTEXAI"]
+
+# Initialize client cleanly
+client = genai.Client()
 
 # -------------------------------------------------------------------------
 # 3. SIDEBAR CONFIGURATION & PERSONAS
@@ -103,54 +107,39 @@ st.markdown("<h1 style='text-align: center; color: #a29bfe;'>GYAN</h1>", unsafe_
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display chat history
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# User input box
 if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc..."):
-    # Append user message
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Prepare context including document RAG if available
     contents = []
     if document_text:
         contents.append(f"Context from uploaded document:\n{document_text}\n\n")
     
-    # Add conversation history context
     for msg in st.session_state.messages:
         contents.append(f"{msg['role'].capitalize()}: {msg['content']}")
 
-    # Generate AI response with retry logic and 2.5-flash model
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
         message_placeholder.markdown("Thinking...")
         
-        max_retries = 3
-        response_text = None
-        
-        for attempt in range(max_retries):
-            try:
-                response = client.models.generate_content(
-                    model='gemini-2.5-flash', 
-                    contents=contents,
-                    config=types.GenerateContentConfig(
-                        system_instruction=active_system_instruction,
-                        temperature=0.7,
-                        thinking_config=types.ThinkingConfig(thinking_level="HIGH")
-                    )
+        try:
+            # Using the stable, standard model ID
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=active_system_instruction,
+                    temperature=0.7,
                 )
-                response_text = response.text
-                break
-            except Exception as e:
-                if "503" in str(e) and attempt < max_retries - 1:
-                    time.sleep(1.5)  # Brief pause before retrying
-                    continue
-                else:
-                    response_text = f"Server is busy handling high traffic (503). Gyan automatically tried to reconnect—please send your message again in a moment! (Error details: {e})"
+            )
+            response_text = response.text
+        except Exception as e:
+            response_text = f"API Error Encountered: {e}"
         
         message_placeholder.markdown(response_text)
         st.session_state.messages.append({"role": "assistant", "content": response_text})

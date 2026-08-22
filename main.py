@@ -124,7 +124,15 @@ def load_users():
     if os.path.exists(USERS_FILE):
         try:
             with open(USERS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
+                # Normalize old format if necessary
+                normalized = {}
+                for k, v in data.items():
+                    if isinstance(v, str):
+                        normalized[k] = {"password": v, "display_name": k}
+                    else:
+                        normalized[k] = v
+                return normalized
         except Exception:
             pass
     return {}
@@ -188,8 +196,6 @@ if not st.session_state.logged_in:
                 if not clean_user or not signup_pass:
                     st.warning("Please fill in all fields.")
                 else:
-                    # If username already exists, allow them to share/log into it if password matches, 
-                    # or update/create the account seamlessly without blocking them.
                     if clean_user in users:
                         if users[clean_user].get("password") == signup_pass:
                             st.session_state.logged_in = True
@@ -198,7 +204,7 @@ if not st.session_state.logged_in:
                             st.success("Logged in successfully!")
                             st.rerun()
                         else:
-                            st.error("This username exists with a different password. Please check your password or choose a variation.")
+                            st.error("This username exists with a different password. Please check your password.")
                     else:
                         users[clean_user] = {
                             "password": signup_pass,

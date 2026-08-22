@@ -4,7 +4,6 @@ import json
 import streamlit as st
 from groq import Groq
 from pypdf import PdfReader
-from PIL import Image
 
 # -------------------------------------------------------------------------
 # 1. PAGE CONFIGURATION & STYLING
@@ -91,7 +90,7 @@ def get_active_chat():
     return st.session_state.chats[0]
 
 # -------------------------------------------------------------------------
-# 5. SIDEBAR CONFIGURATION (Cleaned up: Only History & Personas)
+# 5. SIDEBAR CONFIGURATION (History & Personas Only)
 # -------------------------------------------------------------------------
 with st.sidebar:
     st.markdown("### 💬 CHAT HISTORY")
@@ -105,7 +104,7 @@ with st.sidebar:
 
     st.markdown("---")
     
-    
+    # Display saved chats list with select and delete buttons side-by-side
     for chat in list(st.session_state.chats):
         is_active = chat["id"] == st.session_state.active_chat_id
         label = f"📌 {chat['title']}" if is_active else chat["title"]
@@ -159,40 +158,31 @@ with st.sidebar:
     active_system_instruction = system_instructions.get(persona_choice, "You are Gyan, a helpful AI assistant.")
 
 # -------------------------------------------------------------------------
-# 6. CHAT INTERFACE & BOTTOM TASKBAR FILE UPLOAD
+# 6. CHAT INTERFACE & RESOURCE ATTACHMENT
 # -------------------------------------------------------------------------
 st.markdown("<h1 style='text-align: center; color: #a29bfe;'>GYAN</h1>", unsafe_allow_html=True)
 
 active_chat = get_active_chat()
 
-
+# Render existing messages for the active chat
 for message in active_chat["messages"]:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
+# Taskbar attachment option right above the chat input
+with st.expander("➕ Attach Photo, PDF, or Text Resource"):
+    uploaded_resource = st.file_uploader(
+        "Upload resource file", 
+        type=["png", "jpg", "jpeg", "pdf", "txt"], 
+        label_visibility="collapsed"
+    )
 
-input_col1, input_col2 = st.columns([0.08, 0.92])
-
-uploaded_resource = None
-with input_col1:
-    
-    with st.popover("➕", help="Upload photo, PDF, or text resource"):
-        uploaded_resource = st.file_uploader(
-            "Upload resource", 
-            type=["png", "jpg", "jpeg", "pdf", "txt"], 
-            label_visibility="collapsed"
-        )
-
-with input_col2:
-    prompt = st.chat_input("Ask a coding problem, exam query, or reference an uploaded file...")
-
-
+# Process uploaded file content if present
 resource_context = ""
 if uploaded_resource is not None:
     try:
         file_extension = uploaded_resource.name.split(".")[-1].lower()
         if file_extension in ["png", "jpg", "jpeg"]:
-            
             resource_context = f"[Attached Image: {uploaded_resource.name}]"
             st.info(f"📷 Attached image: {uploaded_resource.name}")
         elif file_extension == "pdf":
@@ -208,16 +198,15 @@ if uploaded_resource is not None:
     except Exception as e:
         st.error(f"Error processing resource: {e}")
 
-if prompt:
-    
+if prompt := st.chat_input("Ask a coding problem, exam query, or reference an uploaded file..."):
     full_user_input = prompt
     if resource_context:
         full_user_input = f"{prompt}\n\n[Resource Content / Context Provided]:\n{resource_context}"
 
-    
+    # Append user prompt to current chat
     active_chat["messages"].append({"role": "user", "content": full_user_input})
     
-    
+    # Auto-update title if it's the first message
     if active_chat["title"] == "New Chat":
         active_chat["title"] = prompt[:25] + ("..." if len(prompt) > 25 else "")
 

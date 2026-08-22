@@ -1,31 +1,34 @@
-# Gyan-AI
-# 🧠 Gyan AI Platform
+# 🧠 Gyan AI
 
-**Gyan** is an advanced, high-performance AI assistant web application built with **Streamlit**, **Scikit-Learn**, and Google's **Gemini Flash** API. Unlike standard API wrappers, Gyan features a unique hybrid architecture that classifies user intent locally before routing context-aware instructions to the LLM.
-
----
-
-## ✨ Key Features
-
-* **Hybrid ML Intent Routing:** Uses a custom trained Naive Bayes classifier (`ml_model.py`) to categorize queries into Coding, Data Science, Exam Prep, Resume Roasting, or General chat.
-* **Document RAG (Chat with Files):** Seamlessly upload PDF or TXT files in the sidebar and chat directly with your documents.
-* **Dynamic AI Personas:** Instantly switch between expert styles (*Senior Tech Lead*, *Strict Professor*, or *Chill Mentor*).
-* **Gemini-Style Sidebar History:** Fully functional multi-session chat history with auto-generated dynamic titles.
-* **High-Precision Reasoning:** Configured with deep thinking levels (`thinking_level="HIGH"`) for maximum technical accuracy.
-* **Resilient Architecture:** Includes built-in auto-retry protection to handle 503 high-demand traffic spikes gracefully.
-* **Modern UI Design:** Sleek glassmorphism cards, glowing gradient typography, and a custom semi-dark developer theme.
+Gyan AI is a high-performance, multi-persona conversational assistant built with **Streamlit** and powered by **Groq's ultra-fast inference engine**. It features dynamic persona switching, document context ingestion (RAG), and lightning-fast text processing, completely bypassing complex cloud configuration overhead.
 
 ---
 
-## 📁 Project Structure
+## ✨ Features
 
-```text
-gemini-ml-bot/
-├── .github
-├── .streamlit
-├── __pycache__
-├── app.py             # Main Streamlit web application & UI logic
-├── ml_model.py        # Scikit-Learn Naive Bayes intent classification pipeline
-├──  README.md          # Project documentation
-├── requirements.txt
-├── service_accounts.json
+* **Multi-Persona Intelligence**: Seamlessly switch between specialized AI modes:
+  * **Senior Tech Lead**: For clean code snippets, architecture choices, and rigorous code reviews.
+  * **Data Science Mentor**: For machine learning workflows, pandas operations, and statistical logic.
+  * **Exam Prep Coach**: For structured academic revision, chapter summaries, and high-yield concepts.
+  * **Creative Director**: For typography feedback, design layouts, and color palettes.
+* **Document Context Ingestion (RAG)**: Upload PDF or TXT files directly to ground the AI's responses in your custom documents.
+* **Blazing Fast Performance**: Powered by Groq's LPU infrastructure, delivering thousands of tokens per second.
+* **Clean UI**: Built with Streamlit for a responsive, clean, and modern web interface.
+
+---
+
+## 🛠️ Tech Stack
+
+* **Frontend & UI**: [Streamlit](https://streamlit.io/)
+* **AI Inference Provider**: [Groq API](https://groq.com/) (`openai/gpt-oss-20b`)
+* **Document Parsing**: `pypdf`
+* **Language**: Python 3.10+
+
+---
+
+## 🚀 Quick Setup & Installation
+
+### 1. Clone the Repository
+```bash
+git clone [https://github.com/your-username/gyan-ai.git](https://github.com/your-username/gyan-ai.git)
+cd gyan-ai

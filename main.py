@@ -4,37 +4,23 @@ import json
 import streamlit as st
 from groq import Groq
 
+# -------------------------------------------------------------------------
+# 1. PAGE CONFIGURATION & STYLING
+# -------------------------------------------------------------------------
+st.set_page_config(
+    page_title="Gyan AI",
+    page_icon="🧠",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
 hide_streamlit_style = """
 <style>
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 header {visibility: hidden;}
-
-/* Hide file uploaders */
-[data-testid="stFileUploader"] {
-    display: none !important;
-}
-
-/* Hide attachment/document controls in chat input */
-[data-testid="stChatInput"] [data-testid="stChatInputFileButton"] {
-    display: none !important;
-}
-
-/* Alternative selectors for different Streamlit versions */
-[data-testid="stChatInput"] button[aria-label*="Attach"] {
-    display: none !important;
-}
-
-[data-testid="stChatInput"] button[aria-label*="file" i] {
-    display: none !important;
-}
-
-[data-testid="stChatInput"] button[aria-label*="document" i] {
-    display: none !important;
-}
 </style>
 """
-
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 # -------------------------------------------------------------------------
@@ -100,9 +86,16 @@ def get_active_chat():
     return st.session_state.chats[0]
 
 # -------------------------------------------------------------------------
-# 5. SIDEBAR: CHAT HISTORY & PERSONAS
+# 5. SIDEBAR: LOGO, CHAT HISTORY & PERSONAS
 # -------------------------------------------------------------------------
 with st.sidebar:
+    # Display Custom Logo if logo.png exists in the folder
+    if os.path.exists("logo.png"):
+        st.image("logo.png", use_container_width=True)
+    else:
+        st.markdown("<h2 style='text-align: center; color: #a29bfe;'>GYAN AI</h2>", unsafe_allow_html=True)
+
+    st.markdown("---")
     st.markdown("### 💬 CHAT HISTORY")
     
     if st.button("➕ New Chat", use_container_width=True):
@@ -139,31 +132,30 @@ with st.sidebar:
     persona_choice = st.selectbox(
         "Choose Persona",
         [
+            "Exam Prep Coach",
             "Strict Professor",
             "Senior Tech Lead", 
             "Data Science Mentor", 
-            "Exam Prep Coach", 
             "Creative Director"
         ],
         label_visibility="collapsed"
     )
     
     system_instructions = {
+        "Exam Prep Coach": (
+            "You are an elite university Exam Prep Coach specializing in rigorous engineering and technical subjects. "
+            "When given a topic, formula, or syllabus item, break it down into clean step-by-step derivations, "
+            "key conceptual definitions, and standard numerical problem-solving workflows. "
+            "Keep explanations high-yield, structured, and tailored for scoring top semester exam grades."
+        ),
         "Strict Professor": (
             "You are a notoriously strict, old-school university professor holding a viva and grading tests. "
             "Do not accept vague answers or sugarcoat feedback. When the student answers a viva question or submits test work, "
             "critique their logic brutally, point out flaws, and assign a strict numeric score out of 10 with detailed remarks. "
             "Never give a 10/10 unless the answer is flawless."
         ),
-        "Exam Prep Coach": (
-            "You are an elite university Exam Prep Coach specializing in rigorous engineering and technical subjects. "
-            "When given a topic, formula, or syllabus item, break it down into clean step-by-step derivations, "
-            "key conceptual definitions, and standard numerical problem-solving workflows. "
-            "Keep explanations high-yield, structured, and tailored for scoring top semester grades."
-        ),
         "Senior Tech Lead": "You are an expert Senior Tech Lead. Provide clean, efficient code snippets, rigorous code reviews, and robust software architecture guidance.",
         "Data Science Mentor": "You are a Data Science Mentor. Help with machine learning algorithms, pandas dataframes, scikit-learn pipelines, statistics, and data cleaning workflows.",
-        "Exam Prep Coach": "You are an academic Exam Prep Coach. Break down tough engineering concepts, create structured study guides, summarize chapters, and give high-yield revision notes.",
         "Creative Director": "You are a Creative Director. Offer sharp typography feedback, color palette advice, design layouts, and creative direction for visual projects."
     }
     
@@ -183,7 +175,7 @@ for message in active_chat["messages"]:
         st.markdown(message["content"])
 
 # Bottom Chat Input
-if prompt := st.chat_input("Ask a coding problem, exam question, or chat with your AI persona..."):
+if prompt := st.chat_input("Ask an exam derivation, technical problem, or chat with your coach..."):
     active_chat["messages"].append({"role": "user", "content": prompt})
     
     if active_chat["title"] == "New Chat":

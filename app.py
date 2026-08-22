@@ -1,29 +1,10 @@
 import os
-import time
 import streamlit as st
-from google import genai
-from google.genai import types
+from groq import Groq
 from pypdf import PdfReader
-from google.oauth2 import service_account
-# -------------------------------------------------------------------------
-# CLIENT INITIALIZATION FOR AQ. KEYS (Vertex AI API Key Mode)
-# -------------------------------------------------------------------------
-API_KEY = "AQ.Ab8RN6KqwycSHIz3cBUCdNiguNiv9EMVvcNLN9joxZJgW-rZCg"
-PROJECT_ID = "gen-lang-client-0656156962"
 
-try:
-    # Modern SDK allows using AQ keys directly when routed via Vertex mode with a Project ID
-    client = genai.Client(
-        vertexai=True,
-        project=PROJECT_ID,
-        location="us-central1",
-        api_key=API_KEY
-    )
-except Exception as e:
-    st.error(f"Failed to initialize client: {e}")
-    st.stop()
 # -------------------------------------------------------------------------
-# 1. PAGE CONFIGURATION & SERVICE ACCOUNT AUTHENTICATION
+# 1. PAGE CONFIGURATION
 # -------------------------------------------------------------------------
 st.set_page_config(
     page_title="Gyan AI",
@@ -32,36 +13,30 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "service_account.json"
-
+# -------------------------------------------------------------------------
+# 2. CLIENT INITIALIZATION (Using Groq - No GCP/JWT Headaches)
+# -------------------------------------------------------------------------
+api_key = None
 try:
-    client = genai.Client(
-        vertexai=True,
-        project="gen-lang-client-0656156962", 
-        location="us-central1"
-    )
-except Exception as e:
-    st.error(f"Failed to initialize client via Service Account: {e}")
+    if "GROQ_API_KEY" in st.secrets:
+        api_key = str(st.secrets["GROQ_API_KEY"]).strip()
+except Exception:
+    pass
+
+if not api_key:
+    api_key = os.getenv("GROQ_API_KEY", "").strip()
+
+if not api_key:
+    st.error("⚠️ GROQ_API_KEY is missing. Please configure it in your Streamlit Secrets.")
     st.stop()
 
-# -------------------------------------------------------------------------
-# 2. VERTEX AI CLIENT INITIALIZATION (Service Account Mode)
-# -------------------------------------------------------------------------
-import os
-from google import genai
-from google.genai import types
-
-# Force Vertex AI backend to talk to aiplatform.googleapis.com instead of AI Studio
-os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "true"
-os.environ["GOOGLE_CLOUD_PROJECT"] = "gen-lang-client-0656156962"
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "service_account.json"
-
-# Initialize client WITHOUT an api_key parameter so it uses the service account credentials
 try:
-    client = genai.Client()
+    # Clean initialization using a normal, standard API key
+    client = Groq(api_key=api_key)
 except Exception as e:
-    st.error(f"Failed to initialize Vertex AI client: {e}")
+    st.error(f"Failed to initialize Groq client: {e}")
     st.stop()
+
 # -------------------------------------------------------------------------
 # 3. SIDEBAR CONFIGURATION & PERSONAS
 # -------------------------------------------------------------------------
@@ -129,12 +104,14 @@ if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc...
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    contents = []
+    # Build messages payload for Groq
+    messages_payload = [{"role": "system", "content": active_system_instruction}]
+    
     if document_text:
-        contents.append(f"Context from uploaded document:\n{document_text}\n\n")
+        messages_payload.append({"role": "system", "content": f"Context from uploaded document:\n{document_text}"})
     
     for msg in st.session_state.messages:
-        contents.append(f"{msg['role'].capitalize()}: {msg['content']}")
+        messages_payload.append({"role": msg["role"], "content": msg["content"]})
 
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
@@ -142,15 +119,13 @@ if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc...
         
         response_text = None
         try:
-            response = client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=contents,
-                config=types.GenerateContentConfig(
-                    system_instruction=active_system_instruction,
-                    temperature=0.7
-                )
+            # Using Llama 3.3 70B on Groq (extremely smart and fast)
+            chat_completion = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=messages_payload,
+                temperature=0.7,
             )
-            response_text = response.text
+            response_text = chat_completion.choices[0].message.content
         except Exception as e:
             response_text = f"API Error Encountered: {e}"
         

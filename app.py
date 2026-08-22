@@ -33,7 +33,9 @@ if not api_key:
     st.stop()
 
 os.environ["GEMINI_API_KEY"] = api_key
-client = genai.Client()
+if "GOOGLE_APPLICATION_CREDENTIALS" in os.environ:
+    del os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
+client = genai.Client(api_key=api_key)
 
 # -------------------------------------------------------------------------
 # 3. SIDEBAR CONFIGURATION & PERSONAS

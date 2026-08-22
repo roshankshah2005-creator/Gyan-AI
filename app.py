@@ -3,9 +3,9 @@ import streamlit as st
 from google import genai
 from pypdf import PdfReader
 
-# -------------------------------------------------------------------------
+# ============================================================
 # 1. PAGE CONFIGURATION
-# -------------------------------------------------------------------------
+# ============================================================
 
 st.set_page_config(
     page_title="Gyan AI",
@@ -14,48 +14,51 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# -------------------------------------------------------------------------
+# ============================================================
 # 2. GET GEMINI API KEY
-# -------------------------------------------------------------------------
+# ============================================================
 
 api_key = None
 
-# First try Streamlit Secrets
+# Streamlit Cloud Secrets
 try:
-    if "GEMINI_API_KEY" in st.secrets:
-        api_key = str(st.secrets["GEMINI_API_KEY"]).strip()
+    api_key = st.secrets.get("GEMINI_API_KEY")
 except Exception:
     pass
 
-# Then try environment variable
+# Local environment variable fallback
 if not api_key:
-    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    api_key = os.getenv("GEMINI_API_KEY")
 
-# Stop if API key is missing
+# Remove accidental whitespace
+if api_key:
+    api_key = str(api_key).strip()
+
+# Stop if API key doesn't exist
 if not api_key:
     st.error(
-        "⚠️ GEMINI_API_KEY is missing. "
-        "Please add it to Streamlit Secrets or your environment variables."
+        "❌ GEMINI_API_KEY is missing.\n\n"
+        "Add your Gemini API key to Streamlit Secrets."
     )
     st.stop()
 
-# -------------------------------------------------------------------------
-# 3. CREATE GEMINI CLIENT
-# -------------------------------------------------------------------------
+# ============================================================
+# 3. INITIALIZE GEMINI CLIENT
+# ============================================================
 
 try:
     client = genai.Client(api_key=api_key)
 except Exception as e:
-    st.error(f"❌ Failed to initialize Gemini client: {e}")
+    st.error(f"❌ Failed to initialize Gemini: {e}")
     st.stop()
 
-# -------------------------------------------------------------------------
+# ============================================================
 # 4. SIDEBAR
-# -------------------------------------------------------------------------
+# ============================================================
 
 with st.sidebar:
 
-    st.markdown("### 🤖 AI PERSONA")
+    st.markdown("## 🤖 AI PERSONA")
 
     persona_choice = st.selectbox(
         "Choose Persona",
@@ -68,54 +71,107 @@ with st.sidebar:
         label_visibility="collapsed"
     )
 
+    # --------------------------------------------------------
+    # PERSONAS
+    # --------------------------------------------------------
+
     system_instructions = {
 
         "Senior Tech Lead":
-            """You are an expert Senior Tech Lead.
-            Provide clean, efficient code snippets,
-            rigorous code reviews, debugging help,
-            and robust software architecture guidance.
-            Explain technical concepts clearly.""",
+            """
+            You are GYAN, an expert Senior Tech Lead.
+
+            Help the user with:
+            - Python
+            - C/C++
+            - Java
+            - debugging
+            - software architecture
+            - Git and GitHub
+            - APIs
+            - clean code
+            - project development
+
+            Give practical and production-quality solutions.
+            Explain code clearly.
+            When providing code, provide complete working examples.
+            """,
 
         "Data Science Mentor":
-            """You are a Data Science Mentor.
-            Help with Python, pandas, NumPy, SQL,
-            machine learning, statistics,
-            scikit-learn, data cleaning,
-            visualization, and ML projects.
-            Teach concepts step by step.""",
+            """
+            You are GYAN, an expert Data Science Mentor.
+
+            Help the user with:
+            - Python
+            - NumPy
+            - Pandas
+            - SQL
+            - Matplotlib
+            - Plotly
+            - Machine Learning
+            - Statistics
+            - Scikit-learn
+            - Data Cleaning
+            - EDA
+            - NLP
+            - ML projects
+
+            Teach concepts step by step.
+            Give practical examples and clean code.
+            """,
 
         "Exam Prep Coach":
-            """You are an academic Exam Prep Coach.
-            Break down difficult engineering concepts,
-            create structured study guides,
-            provide high-yield revision notes,
-            formulas, examples, and exam-oriented explanations.""",
+            """
+            You are GYAN, an academic Exam Preparation Coach.
+
+            Help students understand difficult concepts.
+
+            Provide:
+            - simple explanations
+            - formulas
+            - derivations
+            - examples
+            - revision notes
+            - important exam points
+            - practice questions
+
+            Prioritize exam-oriented and easy-to-understand explanations.
+            """,
 
         "Creative Director":
-            """You are a Creative Director.
-            Provide typography feedback,
-            color palette advice, layout suggestions,
-            branding ideas, poster design guidance,
-            and creative direction for visual projects."""
+            """
+            You are GYAN, an expert Creative Director.
+
+            Help with:
+            - graphic design
+            - Photoshop
+            - Canva
+            - typography
+            - color palettes
+            - posters
+            - branding
+            - social media designs
+            - T-shirt designs
+            - visual hierarchy
+
+            Give practical and professional design advice.
+            """
     }
 
     active_system_instruction = system_instructions[persona_choice]
 
-    # ---------------------------------------------------------------------
-    # DOCUMENT RAG
-    # ---------------------------------------------------------------------
+    # --------------------------------------------------------
+    # DOCUMENT UPLOAD
+    # --------------------------------------------------------
 
     st.markdown("---")
-    st.markdown("### 📄 DOCUMENT RAG")
+
+    st.markdown("## 📄 DOCUMENT RAG")
 
     uploaded_file = st.file_uploader(
         "Upload PDF or TXT",
-        type=["pdf", "txt"],
-        label_visibility="collapsed"
+        type=["pdf", "txt"]
     )
-
-    st.caption("PDF / TXT")
 
     document_text = ""
 
@@ -128,6 +184,7 @@ with st.sidebar:
                 reader = PdfReader(uploaded_file)
 
                 for page in reader.pages:
+
                     text = page.extract_text()
 
                     if text:
@@ -135,62 +192,77 @@ with st.sidebar:
 
             else:
 
-                document_text = uploaded_file.read().decode("utf-8")
+                document_text = uploaded_file.read().decode(
+                    "utf-8",
+                    errors="ignore"
+                )
 
             st.success("✅ Document loaded successfully!")
 
+            # Show document information
+            st.caption(
+                f"Characters extracted: {len(document_text):,}"
+            )
+
         except Exception as e:
 
-            st.error(f"❌ Error reading document: {e}")
+            st.error(
+                f"❌ Error reading document: {e}"
+            )
 
-    # ---------------------------------------------------------------------
+    # --------------------------------------------------------
     # NEW CHAT
-    # ---------------------------------------------------------------------
+    # --------------------------------------------------------
 
     st.markdown("---")
 
-    if st.button("➕ New Chat", use_container_width=True):
+    if st.button(
+        "➕ New Chat",
+        use_container_width=True
+    ):
 
         st.session_state.messages = []
 
         st.rerun()
 
-# -------------------------------------------------------------------------
-# 5. MAIN UI
-# -------------------------------------------------------------------------
+# ============================================================
+# 5. MAIN HEADER
+# ============================================================
 
 st.markdown(
     """
     <h1 style="
-        text-align:center;
-        color:#a29bfe;
-        font-size:60px;
-        margin-bottom:0px;
+        text-align: center;
+        color: #a29bfe;
+        font-size: 60px;
+        margin-bottom: 0px;
     ">
         GYAN
     </h1>
 
     <p style="
-        text-align:center;
-        color:#888;
-        font-size:18px;
+        text-align: center;
+        color: #888888;
+        font-size: 18px;
+        margin-top: 0px;
     ">
-        Your AI-powered learning & coding assistant
+        Your AI-powered learning, coding & productivity assistant
     </p>
     """,
     unsafe_allow_html=True
 )
 
-# -------------------------------------------------------------------------
-# 6. INITIALIZE CHAT HISTORY
-# -------------------------------------------------------------------------
+# ============================================================
+# 6. SESSION STATE
+# ============================================================
 
 if "messages" not in st.session_state:
+
     st.session_state.messages = []
 
-# -------------------------------------------------------------------------
-# 7. DISPLAY PREVIOUS MESSAGES
-# -------------------------------------------------------------------------
+# ============================================================
+# 7. DISPLAY CHAT HISTORY
+# ============================================================
 
 for message in st.session_state.messages:
 
@@ -198,15 +270,20 @@ for message in st.session_state.messages:
 
         st.markdown(message["content"])
 
-# -------------------------------------------------------------------------
+# ============================================================
 # 8. CHAT INPUT
-# -------------------------------------------------------------------------
+# ============================================================
 
-if prompt := st.chat_input(
-    "Ask a coding problem, exam query, or upload a document..."
-):
+prompt = st.chat_input(
+    "Ask GYAN anything..."
+)
 
-    # Save user message
+if prompt:
+
+    # --------------------------------------------------------
+    # SAVE USER MESSAGE
+    # --------------------------------------------------------
+
     st.session_state.messages.append(
         {
             "role": "user",
@@ -214,18 +291,22 @@ if prompt := st.chat_input(
         }
     )
 
-    # Display user message
+    # --------------------------------------------------------
+    # DISPLAY USER MESSAGE
+    # --------------------------------------------------------
+
     with st.chat_message("user"):
+
         st.markdown(prompt)
 
-    # ---------------------------------------------------------------------
-    # BUILD PROMPT
-    # ---------------------------------------------------------------------
+    # --------------------------------------------------------
+    # BUILD CONTEXT
+    # --------------------------------------------------------
 
-    conversation = []
+    conversation_parts = []
 
-    # System instructions
-    conversation.append(
+    # System instruction
+    conversation_parts.append(
         f"""
 SYSTEM INSTRUCTIONS:
 
@@ -233,40 +314,46 @@ SYSTEM INSTRUCTIONS:
 """
     )
 
-    # Document context
+    # Uploaded document
     if document_text:
 
-        conversation.append(
+        conversation_parts.append(
             f"""
 UPLOADED DOCUMENT:
 
 {document_text}
 
-Use the uploaded document as the primary source
-when the user's question is related to it.
-If the answer cannot be found in the document,
-clearly say so and then answer using your general knowledge.
+IMPORTANT:
+
+Use the uploaded document as context when answering
+questions related to it.
+
+If the answer is not available in the document,
+say that clearly and then use your general knowledge.
 """
         )
 
-    # Previous conversation
-    for msg in st.session_state.messages:
+    # Conversation history
+    for message in st.session_state.messages:
 
-        conversation.append(
-            f"{msg['role'].upper()}: {msg['content']}"
+        role = message["role"].upper()
+        content = message["content"]
+
+        conversation_parts.append(
+            f"{role}:\n{content}"
         )
 
-    final_prompt = "\n\n".join(conversation)
+    final_prompt = "\n\n".join(conversation_parts)
 
-    # ---------------------------------------------------------------------
-    # GEMINI RESPONSE
-    # ---------------------------------------------------------------------
+    # --------------------------------------------------------
+    # GENERATE RESPONSE
+    # --------------------------------------------------------
 
     with st.chat_message("assistant"):
 
-        message_placeholder = st.empty()
+        placeholder = st.empty()
 
-        message_placeholder.markdown(" Thinking...")
+        placeholder.markdown("🤔 Thinking...")
 
         try:
 
@@ -278,19 +365,24 @@ clearly say so and then answer using your general knowledge.
             response_text = response.text
 
             if not response_text:
-                response_text = "⚠️ Gemini returned an empty response."
+
+                response_text = (
+                    "⚠️ Gemini returned an empty response."
+                )
 
         except Exception as e:
 
-            response_text = f"""
-❌ **Gemini API Error**
+            response_text = (
+                "❌ **Gemini API Error**\n\n"
+                f"`{str(e)}`"
+            )
 
-`{str(e)}`
-"""
+        placeholder.markdown(response_text)
 
-        message_placeholder.markdown(response_text)
+    # --------------------------------------------------------
+    # SAVE ASSISTANT RESPONSE
+    # --------------------------------------------------------
 
-    # Save assistant response
     st.session_state.messages.append(
         {
             "role": "assistant",

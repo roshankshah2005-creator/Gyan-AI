@@ -420,7 +420,7 @@ with st.sidebar:
 
 
 # -------------------------------------------------------------------------
-# 11. MAIN HEADER WITH REVISED TAGLINE & BOLD USER GREETING
+# 11. MAIN HEADER WITH ENLARGED USER GREETING
 # -------------------------------------------------------------------------
 st.markdown("<div class='brand-title'>gyan</div>", unsafe_allow_html=True)
 display_name = st.session_state.username.capitalize()
@@ -432,15 +432,15 @@ st.markdown(
         font-size:13px;
         letter-spacing:1px;
         margin-top: 5px;
-        margin-bottom: 5px;
+        margin-bottom: 8px;
     '>
         Your Intelligent Multi-Persona AI Companion
     </p>
     <p style='
         text-align:center;
-        color:#ffffff;
-        font-size:15px;
-        font-weight:600;
+        color:#00cec9;
+        font-size:1.8rem;
+        font-weight:700;
         margin-bottom:25px;
     '>
         Hello, {display_name}!

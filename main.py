@@ -5,7 +5,7 @@ import streamlit as st
 from groq import Groq
 
 # -------------------------------------------------------------------------
-# 1. PAGE CONFIGURATION & CLEAN STYLING
+# 1. PAGE CONFIGURATION & STYLING
 # -------------------------------------------------------------------------
 st.set_page_config(
     page_title="Gyan AI",
@@ -16,79 +16,13 @@ st.set_page_config(
 
 hide_streamlit_style = """
 <style>
-/* =========================================================
-   HIDE STREAMLIT DEFAULT UI
-   ========================================================= */
-
-#MainMenu {
-    visibility: hidden !important;
-}
-
-footer {
-    visibility: hidden !important;
-}
-
-header {
-    visibility: hidden !important;
-}
-
-
-/* =========================================================
-   HIDE FILE UPLOADERS
-   ========================================================= */
-
-[data-testid="stFileUploader"] {
-    display: none !important;
-}
-
-
-/* =========================================================
-   HIDE "ADD DOCUMENT" / ATTACHMENT BUTTON
-   FROM CHAT INPUT
-   ========================================================= */
-
-/* Chat input attachment button */
-[data-testid="stChatInput"] button[aria-label*="file" i],
-[data-testid="stChatInput"] button[aria-label*="document" i],
-[data-testid="stChatInput"] button[title*="file" i],
-[data-testid="stChatInput"] button[title*="document" i] {
-    display: none !important;
-}
-
-
-/* Streamlit attachment button */
-[data-testid="stChatInput"] [data-testid*="File"] {
-    display: none !important;
-}
-
-
-/* Buttons containing attachment icons */
-[data-testid="stChatInput"] button:has(svg) {
-    /* Don't hide all buttons — submit button must remain */
-}
-
-
-/* =========================================================
-   CLEAN CHAT INPUT
-   ========================================================= */
-
-[data-testid="stChatInput"] {
-    border-radius: 14px !important;
-}
-
-
-/* =========================================================
-   GENERAL LAYOUT
-   ========================================================= */
-
-.block-container {
-    padding-top: 2rem !important;
-    padding-bottom: 5rem !important;
-}
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
 </style>
 """
-
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+
 # -------------------------------------------------------------------------
 # 2. CLIENT INITIALIZATION
 # -------------------------------------------------------------------------
@@ -216,7 +150,7 @@ with st.sidebar:
     active_system_instruction = system_instructions.get(persona_choice, "You are Gyan, a helpful AI assistant.")
 
 # -------------------------------------------------------------------------
-# 6. MAIN CLEAN CHAT INTERFACE
+# 6. MAIN CHAT INTERFACE
 # -------------------------------------------------------------------------
 st.markdown("<h1 style='text-align: center; color: #a29bfe; margin-bottom: 0px;'>GYAN</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #64748b; font-size: 14px; margin-bottom: 25px;'>Your Multi-Persona AI Study & Tech Companion</p>", unsafe_allow_html=True)

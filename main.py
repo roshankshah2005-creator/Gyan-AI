@@ -86,14 +86,17 @@ def get_active_chat():
     return st.session_state.chats[0]
 
 # -------------------------------------------------------------------------
-# 5. SIDEBAR: LOGO, CHAT HISTORY & PERSONAS
+# 5. SIDEBAR: TYPOGRAPHY LOGO, CHAT HISTORY & PERSONAS
 # -------------------------------------------------------------------------
 with st.sidebar:
-    # Display Custom Logo if logo.png exists in the folder
+    # If logo.png (with transparent background) exists, it renders it; otherwise renders clean text branding
     if os.path.exists("logo.png"):
         st.image("logo.png", use_container_width=True)
     else:
-        st.markdown("<h2 style='text-align: center; color: #a29bfe;'>GYAN AI</h2>", unsafe_allow_html=True)
+        st.markdown(
+            "<h1 style='text-align: center; color: #ffffff; font-family: sans-serif; letter-spacing: 2px; margin-bottom: 0px;'>gyan</h1>", 
+            unsafe_allow_html=True
+        )
 
     st.markdown("---")
     st.markdown("### 💬 CHAT HISTORY")
@@ -164,8 +167,8 @@ with st.sidebar:
 # -------------------------------------------------------------------------
 # 6. MAIN CHAT INTERFACE
 # -------------------------------------------------------------------------
-st.markdown("<h1 style='text-align: center; color: #a29bfe; margin-bottom: 0px;'>GYAN</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #64748b; font-size: 14px; margin-bottom: 25px;'>Your Multi-Persona AI Study & Tech Companion</p>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center; color: #ffffff; margin-bottom: 0px;'>gyan</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #64748b; font-size: 14px; margin-bottom: 25px;'>Your Semester Exam & Tech Companion</p>", unsafe_allow_html=True)
 
 active_chat = get_active_chat()
 

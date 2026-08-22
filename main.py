@@ -153,7 +153,7 @@ def save_chats(chats_data):
 
 
 # -------------------------------------------------------------------------
-# 5. MATH / MARKDOWN CLEANER
+# 5. MATH & TABLE REPAIR CLEANER
 # -------------------------------------------------------------------------
 def clean_math_syntax(text):
     if not text:
@@ -177,35 +177,15 @@ def clean_math_syntax(text):
         flags=re.DOTALL
     )
 
-    # Safe pattern for matching bracketed math
-    latex_commands = (
-        r'frac|dfrac|tfrac|int|iint|iiint|oint|sum|prod|'
-        r'sqrt|partial|nabla|lim|begin|end|mathbf|mathrm|'
-        r'text|alpha|beta|gamma|delta|epsilon|theta|lambda|'
-        r'mu|rho|sigma|phi|omega|Delta|Omega|Gamma|Lambda|'
-        r'cdot|times|rightarrow|leftarrow|Rightarrow|Leftarrow|'
-        r'approx|neq|leq|geq|in|notin|infty|dot|hat|bar|vec|'
-        r'overline|underline|boxed'
-    )
+    # Fix broken table rows where math equations introduced unescaped line breaks
+    # Removes hard line breaks inside table cells (| ... |)
+    def fix_table_row(match):
+        row = match.group(0)
+        return row.replace('\n', ' ')
 
-    pattern = r'\[\s*(\\(?:' + latex_commands + r')\s+.*?|\\' + latex_commands + r'.*?)\s*\]'
+    text = re.sub(r'\|.*\|', fix_table_row, text)
 
-    text = re.sub(
-        pattern,
-        lambda m: "\n\n$$\n" + m.group(1).strip() + "\n$$\n\n",
-        text,
-        flags=re.DOTALL
-    )
-
-    # Catch remaining [ \something ] LaTeX
-    text = re.sub(
-        r'\[\s*(\\[A-Za-z][^\]]*?)\s*\]',
-        lambda m: "\n\n$$\n" + m.group(1).strip() + "\n$$\n\n",
-        text,
-        flags=re.DOTALL
-    )
-
-    # Ensure display equations are separated from text
+    # Ensure display equations are separated from text cleanly
     text = re.sub(r'(?<!\n)\$\$', '\n\n$$', text)
     text = re.sub(r'\$\$(?!\n)', '$$\n\n', text)
 
@@ -319,17 +299,16 @@ with st.sidebar:
         "Exam Prep Coach": (
             "You are an elite university Exam Prep Coach specializing in rigorous engineering and technical subjects.\n\n"
             "Explain concepts clearly and step-by-step. Provide definitions, derivations, formulas, examples, and exam-focused explanations.\n\n"
-            "MATHEMATICAL FORMATTING RULES:\n"
+            "MATHEMATICAL & TABLE FORMATTING RULES:\n"
             "1. Use $...$ for inline mathematics.\n"
             "2. Use $$...$$ for standalone display equations.\n"
-            "3. NEVER use [ ... ] as mathematical delimiters.\n"
-            "4. NEVER write equations wrapped in square brackets.\n"
-            "5. Every display equation must be on its own separate lines with blank lines before and after."
+            "3. NEVER put complex LaTeX equations or line breaks inside Markdown tables (pipes `|`), because it breaks the table structure. Instead, list them using bullet points or numbered lists.\n"
+            "4. Every display equation must be on its own separate line with blank lines before and after."
         ),
         "Strict Professor": (
             "You are a notoriously strict, old-school university professor holding a viva and grading tests.\n\n"
             "Critique logic, point out flaws, and assign a strict numeric score out of 10 when grading answers.\n\n"
-            "For mathematics, use $...$ for inline equations and $$...$$ for display equations. NEVER use [ ... ] as delimiters."
+            "For mathematics, use $...$ for inline equations and $$...$$ for display equations. NEVER put equations inside Markdown tables."
         ),
         "Senior Tech Lead": (
             "You are an expert Senior Tech Lead. Provide clean, efficient code snippets, rigorous code reviews, debugging help, and robust software architecture guidance."

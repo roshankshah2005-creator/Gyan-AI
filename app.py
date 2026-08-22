@@ -15,24 +15,34 @@ st.set_page_config(
 )
 
 # -------------------------------------------------------------------------
-# 2. API KEY VALIDATION & CLIENT INITIALIZATION
+# 2. AUTOMATED API KEY RESOLUTION & CONFLICT PURGING
 # -------------------------------------------------------------------------
+# Purge background GCP variables that force the SDK to look for OAuth tokens
+for gcp_var in ["GOOGLE_APPLICATION_CREDENTIALS", "GOOGLE_CLOUD_PROJECT", "GOOGLE_CLOUD_REGION"]:
+    if gcp_var in os.environ:
+        del os.environ[gcp_var]
+
+# Automatically fetch from Streamlit Secrets or Environment Variables
 api_key = None
 try:
     if "GEMINI_API_KEY" in st.secrets:
-        api_key = st.secrets["GEMINI_API_KEY"]
+        api_key = str(st.secrets["GEMINI_API_KEY"]).strip()
 except Exception:
     pass
 
 if not api_key:
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
 
 if not api_key:
-    st.error("API Key not configured properly on the server.")
+    st.error("⚠️ GEMINI_API_KEY is missing. Please configure it in your Streamlit Secrets.")
     st.stop()
 
-# Configure the stable library directly
-genai.configure(api_key=api_key)
+# Configure the API client automatically
+try:
+    genai.configure(api_key=api_key)
+except Exception as e:
+    st.error(f"Failed to configure Gemini client: {e}")
+    st.stop()
 
 # -------------------------------------------------------------------------
 # 3. SIDEBAR CONFIGURATION & PERSONAS
@@ -80,7 +90,6 @@ with st.sidebar:
             st.error(f"Error reading document: {e}")
 
     st.markdown("---")
-    st.markdown("### 💬 CHAT CONTROLS")
     if st.button("➕ New Chat", use_container_width=True):
         st.session_state.messages = []
         st.rerun()
@@ -102,7 +111,6 @@ if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc...
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Build contents payload
     contents = []
     if document_text:
         contents.append(f"Context from uploaded document:\n{document_text}\n\n")
@@ -116,12 +124,10 @@ if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc...
         
         response_text = None
         try:
-            # Initialize model with system instruction configuration
             model = genai.GenerativeModel(
                 model_name='gemini-2.5-flash',
                 system_instruction=active_system_instruction
             )
-            
             response = model.generate_content(contents)
             response_text = response.text
         except Exception as e:

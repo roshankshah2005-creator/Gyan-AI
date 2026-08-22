@@ -187,18 +187,28 @@ if not st.session_state.logged_in:
                 clean_user = signup_user.strip()
                 if not clean_user or not signup_pass:
                     st.warning("Please fill in all fields.")
-                elif clean_user in users:
-                    st.error("Username already exists. Please log in.")
                 else:
-                    users[clean_user] = {
-                        "password": signup_pass,
-                        "display_name": clean_user
-                    }
-                    save_users(users)
-                    st.session_state.logged_in = True
-                    st.session_state.username = clean_user
-                    st.session_state.needs_display_name = True
-                    st.rerun()
+                    # If username already exists, allow them to share/log into it if password matches, 
+                    # or update/create the account seamlessly without blocking them.
+                    if clean_user in users:
+                        if users[clean_user].get("password") == signup_pass:
+                            st.session_state.logged_in = True
+                            st.session_state.username = clean_user
+                            st.session_state.display_name = users[clean_user].get("display_name", clean_user)
+                            st.success("Logged in successfully!")
+                            st.rerun()
+                        else:
+                            st.error("This username exists with a different password. Please check your password or choose a variation.")
+                    else:
+                        users[clean_user] = {
+                            "password": signup_pass,
+                            "display_name": clean_user
+                        }
+                        save_users(users)
+                        st.session_state.logged_in = True
+                        st.session_state.username = clean_user
+                        st.session_state.needs_display_name = True
+                        st.rerun()
     st.stop()
 
 
@@ -454,14 +464,15 @@ with st.sidebar:
 
 
 # -------------------------------------------------------------------------
-# 12. ACTIVE CHAT & HISTORY
+# 12. MAIN HEADER WITH DYNAMIC DISPLAY NAME
 # -------------------------------------------------------------------------
+st.markdown("<div class='brand-title'>gyan</div>", unsafe_allow_html=True)
+current_name = st.session_state.display_name or st.session_state.username.capitalize()
+
 active_chat = get_active_chat()
 
 # Display intro banner ONLY if the current chat has no messages yet
 if not active_chat["messages"]:
-    st.markdown("<div class='brand-title'>gyan</div>", unsafe_allow_html=True)
-    current_name = st.session_state.display_name or st.session_state.username.capitalize()
     st.markdown(
         f"""
         <p style='

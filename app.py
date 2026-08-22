@@ -4,6 +4,7 @@ import streamlit as st
 from google import genai
 from google.genai import types
 from pypdf import PdfReader
+from google.oauth2 import service_account
 # -------------------------------------------------------------------------
 # CLIENT INITIALIZATION VIA EXPLICIT GOOGLE AUTH (Bypasses JWT/gcloud errors)
 # -------------------------------------------------------------------------

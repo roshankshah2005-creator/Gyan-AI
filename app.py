@@ -158,19 +158,13 @@ with st.sidebar:
     active_system_instruction = system_instructions.get(persona_choice, "You are Gyan, a helpful AI assistant.")
 
 # -------------------------------------------------------------------------
-# 6. MAIN CHAT INTERFACE & INSTANT UPLOAD
+# 6. MODAL DIALOG FOR DOCUMENT UPLOAD (Prevents Dimming)
 # -------------------------------------------------------------------------
-st.markdown("<h1 style='text-align: center; color: #a29bfe;'>GYAN</h1>", unsafe_allow_html=True)
-
-active_chat = get_active_chat()
-
-for message in active_chat["messages"]:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
-# Fast Document Upload Expander
-with st.expander("➕ Add Document Resource"):
-    uploaded_file = st.file_uploader("Upload PDF or TXT", type=["pdf", "txt"], key="taskbar_uploader")
+@st.dialog("📄 Upload Document Resource")
+def upload_document_dialog():
+    st.write("Upload a PDF or TXT file to provide context for your questions.")
+    uploaded_file = st.file_uploader("Choose a file", type=["pdf", "txt"])
+    
     if uploaded_file is not None:
         try:
             uploaded_file.seek(0)
@@ -186,18 +180,31 @@ with st.expander("➕ Add Document Resource"):
                 extracted = uploaded_file.read().decode("utf-8")
             
             if extracted.strip():
-                # Strictly capped at 3,000 characters for instant sub-second processing speed
                 if len(extracted) > 3000:
                     extracted = extracted[:3000]
-                    st.toast("⚡ Document trimmed to 3,000 chars for lightning-fast AI analysis.", icon="🚀")
                 
                 st.session_state.document_text = extracted
                 st.session_state.file_name = uploaded_file.name
                 st.success(f"Successfully loaded {uploaded_file.name}!")
+                if st.button("Done"):
+                    st.rerun()
             else:
-                st.warning("Could not extract text. Make sure your PDF contains selectable text (not scanned images).")
+                st.warning("Could not extract text. Make sure your PDF contains selectable text.")
         except Exception as e:
             st.error(f"Error parsing file: {e}")
+
+# -------------------------------------------------------------------------
+# 7. MAIN CHAT INTERFACE
+# -------------------------------------------------------------------------
+st.markdown("<h1 style='text-align: center; color: #a29bfe;'>GYAN</h1>", unsafe_allow_html=True)
+
+active_chat = get_active_chat()
+
+# Action bar above chat for uploading documents cleanly
+col_btn, col_info = st.columns([2, 8])
+with col_btn:
+    if st.button("➕ Add Document", use_container_width=True):
+        upload_document_dialog()
 
 # Display active attachment badge if loaded
 if st.session_state.file_name:
@@ -210,6 +217,10 @@ if st.session_state.file_name:
             st.session_state.file_name = None
             st.rerun()
 
+for message in active_chat["messages"]:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
 if prompt := st.chat_input("Ask a question or request a summary of your document..."):
     active_chat["messages"].append({"role": "user", "content": prompt})
     
@@ -221,7 +232,6 @@ if prompt := st.chat_input("Ask a question or request a summary of your document
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Build messages payload (Sends system prompt, document context, and ONLY the last 6 messages for maximum speed)
     messages_payload = [{"role": "system", "content": active_system_instruction}]
     
     if st.session_state.document_text:
@@ -230,7 +240,6 @@ if prompt := st.chat_input("Ask a question or request a summary of your document
             "content": f"Reference Document Context Provided by User:\n{st.session_state.document_text}"
         })
     
-    # Keep only the last 6 messages to prevent token bloat and latency
     recent_messages = active_chat["messages"][-6:]
     for msg in recent_messages:
         messages_payload.append({"role": msg["role"], "content": msg["content"]})

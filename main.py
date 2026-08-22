@@ -5,10 +5,10 @@ import streamlit as st
 from groq import Groq
 
 # -------------------------------------------------------------------------
-# 1. PAGE CONFIGURATION & STYLING
+# 1. PAGE CONFIGURATION & STYLING (With Custom Google Font)
 # -------------------------------------------------------------------------
 st.set_page_config(
-    page_title="gyan AI",
+    page_title="GYAN AI",
     page_icon="🧠",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -16,30 +16,37 @@ st.set_page_config(
 
 hide_streamlit_style = """
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&display=swap');
+
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 header {visibility: hidden;}
 
-/* Custom Gradient Styling for GYAN Branding */
+/* Signature Product Branding Font (Orbitron) */
 .brand-title {
-    font-size: 2.5rem;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 3rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #00cec9 0%, #a29bfe 50%, #fd79a8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-align: center;
+    letter-spacing: 4px;
+    margin-bottom: 0px;
+    text-transform: lowercase;
+}
+
+.sidebar-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 2rem;
     font-weight: 800;
     background: linear-gradient(135deg, #00cec9 0%, #a29bfe 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     text-align: center;
     letter-spacing: 3px;
-    margin-bottom: 0px;
-}
-.sidebar-title {
-    font-size: 1.8rem;
-    font-weight: 700;
-    background: linear-gradient(135deg, #00cec9 0%, #a29bfe 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    text-align: center;
-    letter-spacing: 2px;
-    margin-bottom: 10px;
+    margin-bottom: 5px;
+    text-transform: lowercase;
 }
 </style>
 """
@@ -108,12 +115,11 @@ def get_active_chat():
     return st.session_state.chats[0]
 
 # -------------------------------------------------------------------------
-# 5. SIDEBAR: ATTRACTIVE BRANDING, CHAT HISTORY & PERSONAS
+# 5. SIDEBAR: SIGNATURE BRANDING, CHAT HISTORY & PERSONAS
 # -------------------------------------------------------------------------
 with st.sidebar:
-    # Attractive Sidebar Logo Typography
     st.markdown("<div class='sidebar-title'>gyan</div>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #a0aec0; font-size: 11px; margin-top: -10px; margin-bottom: 20px;'>KNOWLEDGE ENGINE</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #a0aec0; font-size: 10px; letter-spacing: 2px; margin-top: -5px; margin-bottom: 20px;'>NEURAL KNOWLEDGE ENGINE</p>", unsafe_allow_html=True)
 
     st.markdown("---")
     st.markdown("### 💬 CHAT HISTORY")
@@ -182,10 +188,10 @@ with st.sidebar:
     active_system_instruction = system_instructions.get(persona_choice, "You are gyan, a helpful AI assistant.")
 
 # -------------------------------------------------------------------------
-# 6. MAIN CHAT INTERFACE WITH ATTRACTIVE BANNER
+# 6. MAIN CHAT INTERFACE WITH SIGNATURE PRODUCT FACE
 # -------------------------------------------------------------------------
 st.markdown("<div class='brand-title'>gyan</div>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #a0aec0; font-size: 14px; margin-bottom: 25px;'>Your Ultimate Semester Exam & Technical Companion</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #a0aec0; font-size: 13px; letter-spacing: 1px; margin-bottom: 25px;'>Your Ultimate Semester Exam & Technical Companion</p>", unsafe_allow_html=True)
 
 active_chat = get_active_chat()
 

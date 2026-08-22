@@ -160,7 +160,7 @@ with st.sidebar:
             "When given a topic, formula, or syllabus item, break it down into clean step-by-step derivations, "
             "key conceptual definitions, and standard numerical problem-solving workflows. "
             "Keep explanations high-yield, structured, and tailored for scoring top semester grades."
-        )
+        ),
         "Senior Tech Lead": "You are an expert Senior Tech Lead. Provide clean, efficient code snippets, rigorous code reviews, and robust software architecture guidance.",
         "Data Science Mentor": "You are a Data Science Mentor. Help with machine learning algorithms, pandas dataframes, scikit-learn pipelines, statistics, and data cleaning workflows.",
         "Exam Prep Coach": "You are an academic Exam Prep Coach. Break down tough engineering concepts, create structured study guides, summarize chapters, and give high-yield revision notes.",

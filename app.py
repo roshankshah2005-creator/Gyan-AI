@@ -1,8 +1,7 @@
 import os
 import time
 import streamlit as st
-from google import genai
-from google.genai import types
+import google.generativeai as genai
 from pypdf import PdfReader
 
 # -------------------------------------------------------------------------
@@ -32,17 +31,9 @@ if not api_key:
     st.error("API Key not configured properly on the server.")
     st.stop()
 
-# FORCE AI STUDIO MODE & PURGE CONFLICTING GCP VARIABLES
-os.environ["GEMINI_API_KEY"] = api_key
-os.environ["GOOGLE_API_KEY"] = api_key
+# Configure the stable library directly
+genai.configure(api_key=api_key)
 
-# Remove variables that trick the SDK into thinking it's on Vertex AI
-for gcp_var in ["GOOGLE_APPLICATION_CREDENTIALS", "GOOGLE_CLOUD_PROJECT", "GOOGLE_CLOUD_REGION"]:
-    if gcp_var in os.environ:
-        del os.environ[gcp_var]
-
-# Explicitly pass vertexai=False to force the Developer API backend
-client = genai.Client(api_key=api_key, vertexai=False)
 # -------------------------------------------------------------------------
 # 3. SIDEBAR CONFIGURATION & PERSONAS
 # -------------------------------------------------------------------------
@@ -59,7 +50,6 @@ with st.sidebar:
         label_visibility="collapsed"
     )
     
-    # Define system instructions based on persona
     system_instructions = {
         "Senior Tech Lead": "You are an expert Senior Tech Lead. Provide clean, efficient code snippets, rigorous code reviews, and robust software architecture guidance.",
         "Data Science Mentor": "You are a Data Science Mentor. Help with machine learning algorithms, pandas dataframes, scikit-learn pipelines, statistics, and data cleaning workflows.",
@@ -74,7 +64,6 @@ with st.sidebar:
     uploaded_file = st.file_uploader("Upload PDF or TXT", type=["pdf", "txt"], label_visibility="collapsed")
     st.caption("200MB per file • PDF, TXT")
 
-    # Extract text from uploaded document if present
     document_text = ""
     if uploaded_file is not None:
         try:
@@ -91,13 +80,8 @@ with st.sidebar:
             st.error(f"Error reading document: {e}")
 
     st.markdown("---")
-    st.markdown("### 💬 RECENT CHATS")
+    st.markdown("### 💬 CHAT CONTROLS")
     if st.button("➕ New Chat", use_container_width=True):
-        st.session_state.messages = []
-        st.rerun()
-
-    st.markdown("")
-    if st.button("💬 New Chat", use_container_width=True):
         st.session_state.messages = []
         st.rerun()
 
@@ -118,6 +102,7 @@ if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc...
     with st.chat_message("user"):
         st.markdown(prompt)
 
+    # Build contents payload
     contents = []
     if document_text:
         contents.append(f"Context from uploaded document:\n{document_text}\n\n")
@@ -129,16 +114,15 @@ if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc...
         message_placeholder = st.empty()
         message_placeholder.markdown("Thinking...")
         
+        response_text = None
         try:
-            # Using the stable, standard model ID
-            response = client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=contents,
-                config=types.GenerateContentConfig(
-                    system_instruction=active_system_instruction,
-                    temperature=0.7,
-                )
+            # Initialize model with system instruction configuration
+            model = genai.GenerativeModel(
+                model_name='gemini-2.5-flash',
+                system_instruction=active_system_instruction
             )
+            
+            response = model.generate_content(contents)
             response_text = response.text
         except Exception as e:
             response_text = f"API Error Encountered: {e}"

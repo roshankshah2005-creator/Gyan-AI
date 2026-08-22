@@ -5,7 +5,7 @@ import streamlit as st
 from groq import Groq
 
 # -------------------------------------------------------------------------
-# 1. PAGE CONFIGURATION & AGGRESSIVE STYLING (Hides any leftover elements)
+# 1. PAGE CONFIGURATION & CLEAN STYLING
 # -------------------------------------------------------------------------
 st.set_page_config(
     page_title="Gyan AI",
@@ -16,18 +16,54 @@ st.set_page_config(
 
 hide_streamlit_style = """
 <style>
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-header {visibility: hidden;}
+/* Hide Streamlit default UI */
+#MainMenu {
+    visibility: hidden;
+}
 
-/* Force-hide any lingering file uploaders or document buttons */
-[data-testid="stFileUploader"], .stFileUploader, div.stFileUploader {
+footer {
+    visibility: hidden;
+}
+
+header {
+    visibility: hidden;
+}
+
+/* Hide ALL file/document upload elements */
+[data-testid="stFileUploader"] {
     display: none !important;
+}
+
+[data-testid="stFileUploaderDropzone"] {
+    display: none !important;
+}
+
+[data-testid="stFileUploaderDropzoneInstructions"] {
+    display: none !important;
+}
+
+/* Hide document/file buttons */
+button[title*="document" i],
+button[aria-label*="document" i],
+button[title*="file" i],
+button[aria-label*="file" i] {
+    display: none !important;
+}
+
+/* Hide any element containing Add Document */
+div:has(> button) {
+    /* Keep normal Streamlit buttons */
+}
+
+/* General clean layout */
+.block-container {
+    padding-top: 2rem;
+    padding-bottom: 5rem;
 }
 </style>
 """
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 # -------------------------------------------------------------------------
 # 2. CLIENT INITIALIZATION
 # -------------------------------------------------------------------------

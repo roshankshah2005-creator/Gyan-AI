@@ -16,10 +16,15 @@ st.set_page_config(
 )
 
 # -------------------------------------------------------------------------
-# 2. AUTOMATED API KEY & CLIENT INITIALIZATION (Modern SDK for AQ keys)
+# 2. AUTOMATED API KEY & CLIENT INITIALIZATION (Modern SDK for API keys)
 # -------------------------------------------------------------------------
-# Purge conflicting cloud background variables
-for gcp_var in ["GOOGLE_APPLICATION_CREDENTIALS", "GOOGLE_CLOUD_PROJECT", "GOOGLE_CLOUD_REGION"]:
+# Purge conflicting cloud background variables that force ADC/OAuth mode
+for gcp_var in [
+    "GOOGLE_APPLICATION_CREDENTIALS",
+    "GOOGLE_CLOUD_PROJECT",
+    "GOOGLE_CLOUD_REGION",
+    "GOOGLE_GENAI_USE_VERTEXAI",
+]:
     if gcp_var in os.environ:
         del os.environ[gcp_var]
 
@@ -37,9 +42,9 @@ if not api_key:
     st.error("⚠️ GEMINI_API_KEY is missing. Please configure it in your Streamlit Secrets.")
     st.stop()
 
-# Initialize the modern client which natively supports AQ. keys
+# Initialize the client, explicitly forcing API-key mode (not Vertex/OAuth)
 try:
-    client = genai.Client(api_key=api_key)
+    client = genai.Client(api_key=api_key, vertexai=False)
 except Exception as e:
     st.error(f"Failed to initialize Gemini client: {e}")
     st.stop()
@@ -52,21 +57,21 @@ with st.sidebar:
     persona_choice = st.selectbox(
         "Choose Persona",
         [
-            "Senior Tech Lead", 
-            "Data Science Mentor", 
-            "Exam Prep Coach", 
+            "Senior Tech Lead",
+            "Data Science Mentor",
+            "Exam Prep Coach",
             "Creative Director"
         ],
         label_visibility="collapsed"
     )
-    
+
     system_instructions = {
         "Senior Tech Lead": "You are an expert Senior Tech Lead. Provide clean, efficient code snippets, rigorous code reviews, and robust software architecture guidance.",
         "Data Science Mentor": "You are a Data Science Mentor. Help with machine learning algorithms, pandas dataframes, scikit-learn pipelines, statistics, and data cleaning workflows.",
         "Exam Prep Coach": "You are an academic Exam Prep Coach. Break down tough engineering concepts, create structured study guides, summarize chapters, and give high-yield revision notes.",
         "Creative Director": "You are a Creative Director. Offer sharp typography feedback, color palette advice, design layouts, and creative direction for visual projects."
     }
-    
+
     active_system_instruction = system_instructions.get(persona_choice, "You are Gyan, a helpful AI assistant.")
 
     st.markdown("---")
@@ -114,14 +119,14 @@ if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc...
     contents = []
     if document_text:
         contents.append(f"Context from uploaded document:\n{document_text}\n\n")
-    
+
     for msg in st.session_state.messages:
         contents.append(f"{msg['role'].capitalize()}: {msg['content']}")
 
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
         message_placeholder.markdown("Thinking...")
-        
+
         response_text = None
         try:
             response = client.models.generate_content(
@@ -135,6 +140,6 @@ if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc...
             response_text = response.text
         except Exception as e:
             response_text = f"API Error Encountered: {e}"
-        
+
         message_placeholder.markdown(response_text)
         st.session_state.messages.append({"role": "assistant", "content": response_text})

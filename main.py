@@ -8,7 +8,7 @@ from groq import Groq
 # 1. PAGE CONFIGURATION & STYLING
 # -------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Gyan AI",
+    page_title="gyan AI",
     page_icon="🧠",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -19,6 +19,28 @@ hide_streamlit_style = """
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 header {visibility: hidden;}
+
+/* Custom Gradient Styling for GYAN Branding */
+.brand-title {
+    font-size: 2.5rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #00cec9 0%, #a29bfe 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-align: center;
+    letter-spacing: 3px;
+    margin-bottom: 0px;
+}
+.sidebar-title {
+    font-size: 1.8rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, #00cec9 0%, #a29bfe 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-align: center;
+    letter-spacing: 2px;
+    margin-bottom: 10px;
+}
 </style>
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
@@ -86,17 +108,12 @@ def get_active_chat():
     return st.session_state.chats[0]
 
 # -------------------------------------------------------------------------
-# 5. SIDEBAR: TYPOGRAPHY LOGO, CHAT HISTORY & PERSONAS
+# 5. SIDEBAR: ATTRACTIVE BRANDING, CHAT HISTORY & PERSONAS
 # -------------------------------------------------------------------------
 with st.sidebar:
-    # If logo.png (with transparent background) exists, it renders it; otherwise renders clean text branding
-    if os.path.exists("logo.png"):
-        st.image("logo.png", use_container_width=True)
-    else:
-        st.markdown(
-            "<h1 style='text-align: center; color: #ffffff; font-family: sans-serif; letter-spacing: 2px; margin-bottom: 0px;'>gyan</h1>", 
-            unsafe_allow_html=True
-        )
+    # Attractive Sidebar Logo Typography
+    st.markdown("<div class='sidebar-title'>gyan</div>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #a0aec0; font-size: 11px; margin-top: -10px; margin-bottom: 20px;'>KNOWLEDGE ENGINE</p>", unsafe_allow_html=True)
 
     st.markdown("---")
     st.markdown("### 💬 CHAT HISTORY")
@@ -162,13 +179,13 @@ with st.sidebar:
         "Creative Director": "You are a Creative Director. Offer sharp typography feedback, color palette advice, design layouts, and creative direction for visual projects."
     }
     
-    active_system_instruction = system_instructions.get(persona_choice, "You are Gyan, a helpful AI assistant.")
+    active_system_instruction = system_instructions.get(persona_choice, "You are gyan, a helpful AI assistant.")
 
 # -------------------------------------------------------------------------
-# 6. MAIN CHAT INTERFACE
+# 6. MAIN CHAT INTERFACE WITH ATTRACTIVE BANNER
 # -------------------------------------------------------------------------
-st.markdown("<h1 style='text-align: center; color: #ffffff; margin-bottom: 0px;'>gyan</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #64748b; font-size: 14px; margin-bottom: 25px;'>Your Semester Exam & Tech Companion</p>", unsafe_allow_html=True)
+st.markdown("<div class='brand-title'>gyan</div>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #a0aec0; font-size: 14px; margin-bottom: 25px;'>Your Ultimate Semester Exam & Technical Companion</p>", unsafe_allow_html=True)
 
 active_chat = get_active_chat()
 

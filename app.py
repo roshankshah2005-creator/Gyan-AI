@@ -1,5 +1,6 @@
 import os
 import uuid
+import json
 import streamlit as st
 from groq import Groq
 from pypdf import PdfReader
@@ -14,6 +15,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Hide Streamlit default header, footer, and menu
 hide_streamlit_style = """
 <style>
 #MainMenu {visibility: hidden;}
@@ -47,11 +49,37 @@ except Exception as e:
     st.stop()
 
 # -------------------------------------------------------------------------
-# 3. CHAT SESSIONS STATE MANAGEMENT
+# 3. PERSISTENT CHAT STORAGE FUNCTIONS
+# -------------------------------------------------------------------------
+CHATS_FILE = "chats.json"
+
+def load_chats():
+    """Load saved chats from local JSON file if it exists."""
+    if os.path.exists(CHATS_FILE):
+        try:
+            with open(CHATS_FILE, "r") as f:
+                data = json.load(f)
+                if data:
+                    return data
+        except Exception:
+            pass
+    
+    initial_id = f"chat_{uuid.uuid4().hex[:6]}"
+    return [{"id": initial_id, "title": "New Chat", "messages": []}]
+
+def save_chats(chats_data):
+    """Save current chats list to local JSON file."""
+    try:
+        with open(CHATS_FILE, "w") as f:
+            json.dump(chats_data, f)
+    except Exception as e:
+        print(f"Error saving chats: {e}")
+
+# -------------------------------------------------------------------------
+# 4. CHAT SESSIONS STATE MANAGEMENT
 # -------------------------------------------------------------------------
 if "chats" not in st.session_state:
-    initial_id = f"chat_{uuid.uuid4().hex[:6]}"
-    st.session_state.chats = [{"id": initial_id, "title": "New Chat", "messages": []}]
+    st.session_state.chats = load_chats()
 
 if "active_chat_id" not in st.session_state:
     st.session_state.active_chat_id = st.session_state.chats[0]["id"]
@@ -63,7 +91,7 @@ def get_active_chat():
     return st.session_state.chats[0]
 
 # -------------------------------------------------------------------------
-# 4. SIDEBAR CONFIGURATION & CHAT HISTORY
+# 5. SIDEBAR CONFIGURATION & CHAT HISTORY
 # -------------------------------------------------------------------------
 with st.sidebar:
     st.markdown("### 💬 CHAT HISTORY")
@@ -72,11 +100,12 @@ with st.sidebar:
         new_id = f"chat_{uuid.uuid4().hex[:6]}"
         st.session_state.chats.insert(0, {"id": new_id, "title": "New Chat", "messages": []})
         st.session_state.active_chat_id = new_id
+        save_chats(st.session_state.chats)
         st.rerun()
 
     st.markdown("---")
     
-    # Display saved chats list
+    # Display saved chats list from persistent storage
     for chat in st.session_state.chats:
         is_active = chat["id"] == st.session_state.active_chat_id
         label = f"📌 {chat['title']}" if is_active else chat["title"]
@@ -135,28 +164,32 @@ with st.sidebar:
             st.error(f"Error reading document: {e}")
 
 # -------------------------------------------------------------------------
-# 5. CHAT INTERFACE & MESSAGE HANDLING
+# 6. CHAT INTERFACE & MESSAGE HANDLING
 # -------------------------------------------------------------------------
 st.markdown("<h1 style='text-align: center; color: #a29bfe;'>GYAN</h1>", unsafe_allow_html=True)
 
 active_chat = get_active_chat()
+
 
 for message in active_chat["messages"]:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
 if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc..."):
-    # Append user prompt to current chat
+    
     active_chat["messages"].append({"role": "user", "content": prompt})
     
-    # Auto-update title if it's the first message
+    
     if active_chat["title"] == "New Chat":
         active_chat["title"] = prompt[:25] + ("..." if len(prompt) > 25 else "")
+
+    
+    save_chats(st.session_state.chats)
 
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    
+   
     messages_payload = [{"role": "system", "content": active_system_instruction}]
     
     if document_text:
@@ -183,4 +216,5 @@ if prompt := st.chat_input("Ask a coding problem, exam query, or upload a doc...
         message_placeholder.markdown(response_text)
         active_chat["messages"].append({"role": "assistant", "content": response_text})
         
+        save_chats(st.session_state.chats)
         st.rerun()

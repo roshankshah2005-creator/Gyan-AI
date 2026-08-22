@@ -4,7 +4,29 @@ import streamlit as st
 from google import genai
 from google.genai import types
 from pypdf import PdfReader
+# -------------------------------------------------------------------------
+# CLIENT INITIALIZATION VIA EXPLICIT GOOGLE AUTH (Bypasses JWT/gcloud errors)
+# -------------------------------------------------------------------------
+KEY_FILE_PATH = "service_account.json"
+PROJECT_ID = "gen-lang-client-0656156962"
 
+try:
+    # Load credentials using google-auth, which handles signature creation natively
+    credentials = service_account.Credentials.from_service_account_file(
+        KEY_FILE_PATH,
+        scopes=["https://www.googleapis.com/auth/cloud-platform"]
+    )
+    
+    # Initialize the client in Vertex AI mode using the authenticated credentials object
+    client = genai.Client(
+        vertexai=True,
+        project=PROJECT_ID,
+        location="us-central1",
+        credentials=credentials
+    )
+except Exception as e:
+    st.error(f"Failed to initialize authenticated client: {e}")
+    st.stop()
 # -------------------------------------------------------------------------
 # 1. PAGE CONFIGURATION & SERVICE ACCOUNT AUTHENTICATION
 # -------------------------------------------------------------------------

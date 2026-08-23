@@ -101,43 +101,19 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------------
-# 4. DATABASE HELPER FUNCTIONS (SUPABASE)
+# 4. CAPTURE USER IP ADDRESS
 # -------------------------------------------------------------------------
-def fetch_all_users():
+def get_user_ip():
     try:
-        res = supabase.table("users").select("*").execute()
-        return {row["id"]: row for row in res.data}
-    except Exception as e:
-        print(f"Error fetching users: {e}")
-        return {}
+        ip = st.context.ip_address
+        return ip if ip else "Localhost / Unknown"
+    except Exception:
+        return "Unknown"
 
-def insert_user(user_id, username, password, display_name):
-    try:
-        supabase.table("users").insert({
-            "id": user_id,
-            "username": username,
-            "password": password,
-            "display_name": display_name
-        }).execute()
-        return True
-    except Exception as e:
-        st.error(f"Supabase Insert Error: {e}")
-        return False
 
-def update_user_password(user_id, new_password):
-    try:
-        supabase.table("users").update({"password": new_password}).eq("id", user_id).execute()
-        return True
-    except Exception as e:
-        print(f"Error updating password: {e}")
-        return False
-
-def update_user_display_name(user_id, display_name):
-    try:
-        supabase.table("users").update({"display_name": display_name}).eq("id", user_id).execute()
-    except Exception as e:
-        print(f"Error updating display name: {e}")
-
+# -------------------------------------------------------------------------
+# 5. DATABASE HELPER FUNCTIONS (SUPABASE)
+# -------------------------------------------------------------------------
 def load_chats_from_db(user_id):
     try:
         res = supabase.table("chats").select("*").eq("user_id", user_id).execute()
@@ -164,12 +140,14 @@ def load_chats_from_db(user_id):
 
 def save_chats_to_db(user_id, chats_data):
     try:
+        user_ip = get_user_ip()
         for chat in chats_data:
             supabase.table("chats").upsert({
                 "id": chat["id"],
                 "user_id": user_id,
                 "title": chat["title"],
-                "messages": chat["messages"]
+                "messages": chat["messages"],
+                "ip_address": user_ip
             }).execute()
     except Exception as e:
         print(f"Error saving chats: {e}")
@@ -182,158 +160,42 @@ def delete_chat_from_db(chat_id):
 
 
 # -------------------------------------------------------------------------
-# 5. SESSION STATE & PERSISTENT LOGIN RECOVERY
+# 6. SESSION STATE & USER IDENTITY (NAME ENTRY)
 # -------------------------------------------------------------------------
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
 if "user_id" not in st.session_state:
     st.session_state.user_id = None
-if "username" not in st.session_state:
-    st.session_state.username = None
 if "display_name" not in st.session_state:
     st.session_state.display_name = None
-if "needs_display_name" not in st.session_state:
-    st.session_state.needs_display_name = False
-if "confirm_logout" not in st.session_state:
-    st.session_state.confirm_logout = False
-if "forgot_password_mode" not in st.session_state:
-    st.session_state.forgot_password_mode = False
 
-# Auto-restore session from URL query parameters across refreshes
-if not st.session_state.logged_in:
+# Auto-restore identity from URL query parameters across refreshes
+if not st.session_state.display_name:
     qp_user_id = st.query_params.get("user_id")
-    qp_username = st.query_params.get("username")
-    
-    if qp_user_id and qp_username:
-        users = fetch_all_users()
-        if qp_user_id in users:
-            st.session_state.logged_in = True
-            st.session_state.user_id = qp_user_id
-            st.session_state.username = qp_username
-            st.session_state.display_name = users[qp_user_id].get("display_name", qp_username)
+    qp_name = st.query_params.get("name")
+    if qp_user_id and qp_name:
+        st.session_state.user_id = qp_user_id
+        st.session_state.display_name = qp_name
 
 
 # -------------------------------------------------------------------------
-# 6. AUTHENTICATION SCREEN (Login / Sign Up / Forgot Password)
+# 7. "WHAT SHOULD I CALL YOU?" WELCOME SCREEN
 # -------------------------------------------------------------------------
-if not st.session_state.logged_in:
-    st.markdown("<div class='brand-title' style='margin-top: 50px;'>gyan</div>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #a0aec0; margin-bottom: 30px;'>Log in or sign up to access your personal neural chat history.</p>", unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns([1, 1.5, 1])
-    with col2:
-        if not st.session_state.forgot_password_mode:
-            tab_login, tab_signup = st.tabs(["🔑 Log In", "📝 Sign Up"])
-            
-            with tab_login:
-                st.subheader("Welcome Back")
-                login_user = st.text_input("Username", key="login_user")
-                login_pass = st.text_input("Password", type="password", key="login_pass")
-                
-                if st.button("Log In", use_container_width=True):
-                    users = fetch_all_users()
-                    matched_uid = None
-                    matched_data = None
-                    
-                    for uid, udata in users.items():
-                        if udata.get("username") == login_user.strip() and udata.get("password") == login_pass:
-                            matched_uid = uid
-                            matched_data = udata
-                            break
-                    
-                    if matched_uid:
-                        st.session_state.logged_in = True
-                        st.session_state.user_id = matched_uid
-                        st.session_state.username = matched_data.get("username")
-                        st.session_state.display_name = matched_data.get("display_name", matched_data.get("username"))
-                        
-                        st.query_params["user_id"] = matched_uid
-                        st.query_params["username"] = matched_data.get("username")
-                        
-                        st.success("Login successful!")
-                        st.rerun()
-                    else:
-                        st.error("Invalid username or password.")
-                
-                if st.button("Forgot Password?", use_container_width=True, type="tertiary"):
-                    st.session_state.forgot_password_mode = True
-                    st.rerun()
-            
-            with tab_signup:
-                st.subheader("Create an Account")
-                signup_user = st.text_input("Choose Username", key="signup_user")
-                signup_pass = st.text_input("Choose Password", type="password", key="signup_pass")
-                
-                if st.button("Sign Up", use_container_width=True):
-                    clean_user = signup_user.strip()
-                    if not clean_user or not signup_pass:
-                        st.warning("Please fill in all fields.")
-                    else:
-                        new_uid = uuid.uuid4().hex[:8]
-                        success = insert_user(new_uid, clean_user, signup_pass, clean_user)
-                        
-                        if success:
-                            st.session_state.logged_in = True
-                            st.session_state.user_id = new_uid
-                            st.session_state.username = clean_user
-                            st.session_state.needs_display_name = True
-                            
-                            st.query_params["user_id"] = new_uid
-                            st.query_params["username"] = clean_user
-                            st.rerun()
-        else:
-            st.subheader("🔒 Reset Password")
-            reset_user = st.text_input("Enter your Username", key="reset_user")
-            new_pass = st.text_input("Enter New Password", type="password", key="new_pass")
-            confirm_pass = st.text_input("Confirm New Password", type="password", key="confirm_pass")
-            
-            if st.button("Update Password", use_container_width=True):
-                clean_reset_user = reset_user.strip()
-                if not clean_reset_user or not new_pass or not confirm_pass:
-                    st.warning("Please fill in all fields.")
-                elif new_pass != confirm_pass:
-                    st.error("New passwords do not match.")
-                else:
-                    users = fetch_all_users()
-                    matched_uid = None
-                    for uid, udata in users.items():
-                        if udata.get("username") == clean_reset_user:
-                            matched_uid = uid
-                            break
-                    
-                    if matched_uid:
-                        success = update_user_password(matched_uid, new_pass)
-                        if success:
-                            st.success("Password updated successfully! Please log in with your new password.")
-                            st.session_state.forgot_password_mode = False
-                            st.rerun()
-                        else:
-                            st.error("Database error updating password.")
-                    else:
-                        st.error("Username not found.")
-            
-            if st.button("Back to Login", use_container_width=True):
-                st.session_state.forgot_password_mode = False
-                st.rerun()
-    st.stop()
-
-
-# -------------------------------------------------------------------------
-# 7. POST-SIGNUP: "WHAT SHOULD I CALL YOU?" SCREEN
-# -------------------------------------------------------------------------
-if st.session_state.needs_display_name:
+if not st.session_state.display_name:
     st.markdown("<div class='brand-title' style='margin-top: 50px;'>gyan</div>", unsafe_allow_html=True)
     st.markdown("<h2 style='text-align: center; color: #00cec9; margin-top: 30px;'>Welcome! What should I call you?</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #a0aec0; margin-bottom: 30px;'>Please enter your preferred name or nickname for personalized greetings.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #a0aec0; margin-bottom: 30px;'>Please enter your preferred name or nickname to begin chatting.</p>", unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
-        preferred_name = st.text_input("Your Name / Nickname", value=st.session_state.username)
+        preferred_name = st.text_input("Your Name / Nickname", key="name_input")
         if st.button("Continue to Gyan", use_container_width=True):
-            if preferred_name.strip():
-                st.session_state.display_name = preferred_name.strip().capitalize()
-                update_user_display_name(st.session_state.user_id, st.session_state.display_name)
-                st.session_state.needs_display_name = False
+            clean_name = preferred_name.strip()
+            if clean_name:
+                st.session_state.display_name = clean_name.capitalize()
+                st.session_state.user_id = uuid.uuid4().hex[:8]
+                
+                # Save identity in URL query params so refreshes keep the name
+                st.query_params["user_id"] = st.session_state.user_id
+                st.query_params["name"] = st.session_state.display_name
                 st.rerun()
             else:
                 st.warning("Please enter a valid name.")
@@ -381,43 +243,28 @@ with st.sidebar:
         f"""
         <p style='
             text-align:center;
-            color:#a0aec0;
-            font-size:10px;
-            letter-spacing:2px;
+            color:#00cec9;
+            font-size:12px;
+            font-weight:600;
+            letter-spacing:1px;
             margin-top:-5px;
-            margin-bottom:10px;
+            margin-bottom:15px;
         '>
-            LOGGED IN AS: {st.session_state.username.upper()}
+            CHATTING AS: {st.session_state.display_name.upper()}
         </p>
         """,
         unsafe_allow_html=True
     )
 
-    # Logout Flow with Confirmation Prompt
-    if not st.session_state.confirm_logout:
-        if st.button("🚪 Log Out", use_container_width=True):
-            st.session_state.confirm_logout = True
-            st.rerun()
-    else:
-        st.warning("Are you sure you want to log out?")
-        col_yes, col_no = st.columns(2)
-        with col_yes:
-            if st.button("Yes", use_container_width=True):
-                st.session_state.logged_in = False
-                st.session_state.user_id = None
-                st.session_state.username = None
-                st.session_state.display_name = None
-                st.session_state.confirm_logout = False
-                st.query_params.clear()
-                if "chats" in st.session_state:
-                    del st.session_state.chats
-                if "active_chat_id" in st.session_state:
-                    del st.session_state.active_chat_id
-                st.rerun()
-        with col_no:
-            if st.button("Cancel", use_container_width=True):
-                st.session_state.confirm_logout = False
-                st.rerun()
+    if st.button("🔄 Switch Name", use_container_width=True):
+        st.session_state.display_name = None
+        st.session_state.user_id = None
+        st.query_params.clear()
+        if "chats" in st.session_state:
+            del st.session_state.chats
+        if "active_chat_id" in st.session_state:
+            del st.session_state.active_chat_id
+        st.rerun()
 
     st.markdown("---")
     st.markdown("### 💬 CHAT HISTORY")
@@ -525,7 +372,6 @@ with st.sidebar:
 # 11. MAIN HEADER & CHAT INTERFACE
 # -------------------------------------------------------------------------
 st.markdown("<div class='brand-title'>gyan</div>", unsafe_allow_html=True)
-current_name = st.session_state.display_name or st.session_state.username.capitalize()
 
 active_chat = get_active_chat()
 
@@ -549,7 +395,7 @@ if not active_chat["messages"]:
             font-weight:700;
             margin-bottom:25px;
         '>
-            Hello, {current_name}!
+            Hello, {st.session_state.display_name}!
         </p>
         """,
         unsafe_allow_html=True

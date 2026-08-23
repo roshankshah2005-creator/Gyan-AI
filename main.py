@@ -1,9 +1,9 @@
 import os
 import uuid
-import json
 import re
 import streamlit as st
 from groq import Groq
+from supabase import create_client, Client
 
 # -------------------------------------------------------------------------
 # 1. PAGE CONFIGURATION
@@ -51,28 +51,11 @@ header {visibility: hidden;}
     margin-bottom: 5px;
 }
 
-/* Hide file uploaders */
-[data-testid="stFileUploader"] {
-    display: none !important;
-}
-
-[data-testid="stFileUploaderDropzone"] {
-    display: none !important;
-}
-
-/* Hide Add Document / attachment button */
-[data-testid="stChatInput"] [data-testid="stChatInputFileButton"] {
-    display: none !important;
-}
-
-[data-testid="stChatInput"] button[aria-label*="Attach" i] {
-    display: none !important;
-}
-
-[data-testid="stChatInput"] button[aria-label*="file" i] {
-    display: none !important;
-}
-
+/* Hide file uploaders & attachments */
+[data-testid="stFileUploader"], [data-testid="stFileUploaderDropzone"],
+[data-testid="stChatInput"] [data-testid="stChatInputFileButton"],
+[data-testid="stChatInput"] button[aria-label*="Attach" i],
+[data-testid="stChatInput"] button[aria-label*="file" i],
 [data-testid="stChatInput"] button[aria-label*="document" i] {
     display: none !important;
 }
@@ -83,71 +66,112 @@ header {visibility: hidden;}
 }
 </style>
 """
-
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 
 # -------------------------------------------------------------------------
-# 3. GROQ CLIENT
+# 3. API & SUPABASE CLIENT INITIALIZATION
 # -------------------------------------------------------------------------
-api_key = None
-
-try:
-    if "GROQ_API_KEY" in st.secrets:
-        api_key = str(st.secrets["GROQ_API_KEY"]).strip()
-except Exception:
-    pass
-
-if not api_key:
-    api_key = os.getenv("GROQ_API_KEY", "").strip()
-
-if not api_key:
-    st.error(
-        "⚠️ GROQ_API_KEY is missing. "
-        "Please configure it in your Streamlit Secrets."
-    )
-    st.stop()
-
-try:
-    client = Groq(api_key=api_key)
-except Exception as e:
-    st.error(f"Failed to initialize Groq client: {e}")
-    st.stop()
-
-
-# -------------------------------------------------------------------------
-# 4. USER DATABASE & AUTHENTICATION STORAGE (UUID-based for duplicate usernames)
-# -------------------------------------------------------------------------
-USERS_FILE = "users.json"
-
-def load_users():
-    if os.path.exists(USERS_FILE):
-        try:
-            with open(USERS_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                normalized = {}
-                for k, v in data.items():
-                    if isinstance(v, str):
-                        # Migrate legacy plain-string user entries
-                        new_id = uuid.uuid4().hex[:8]
-                        normalized[new_id] = {"username": k, "password": v, "display_name": k}
-                    else:
-                        normalized[k] = v
-                return normalized
-        except Exception:
-            pass
-    return {}
-
-def save_users(users_data):
+def get_secret(key):
     try:
-        with open(USERS_FILE, "w", encoding="utf-8") as f:
-            json.dump(users_data, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print(f"Error saving users: {e}")
+        if key in st.secrets:
+            return str(st.secrets[key]).strip()
+    except Exception:
+        pass
+    return os.getenv(key, "").strip()
+
+groq_api_key = get_secret("GROQ_API_KEY")
+supabase_url = get_secret("SUPABASE_URL")
+supabase_key = get_secret("SUPABASE_KEY")
+
+if not groq_api_key:
+    st.error("⚠️ GROQ_API_KEY is missing in secrets.")
+    st.stop()
+
+if not supabase_url or not supabase_key:
+    st.error("⚠️ SUPABASE_URL or SUPABASE_KEY is missing in secrets.")
+    st.stop()
+
+try:
+    client = Groq(api_key=groq_api_key)
+    supabase: Client = create_client(supabase_url, supabase_key)
+except Exception as e:
+    st.error(f"Failed to initialize clients: {e}")
+    st.stop()
 
 
 # -------------------------------------------------------------------------
-# 5. SESSION STATE FOR LOGIN & PROFILE SETUP
+# 4. DATABASE HELPER FUNCTIONS (SUPABASE)
+# -------------------------------------------------------------------------
+def fetch_all_users():
+    try:
+        res = supabase.table("users").select("*").execute()
+        return {row["id"]: row for row in res.data}
+    except Exception:
+        return {}
+
+def insert_user(user_id, username, password, display_name):
+    try:
+        supabase.table("users").insert({
+            "id": user_id,
+            "username": username,
+            "password": password,
+            "display_name": display_name
+        }).execute()
+    except Exception as e:
+        print(f"Error inserting user: {e}")
+
+def update_user_display_name(user_id, display_name):
+    try:
+        supabase.table("users").update({"display_name": display_name}).eq("id", user_id).execute()
+    except Exception as e:
+        print(f"Error updating display name: {e}")
+
+def load_chats_from_db(user_id):
+    try:
+        res = supabase.table("chats").select("*").eq("user_id", user_id).execute()
+        if res.data:
+            chats = []
+            for row in res.data:
+                chats.append({
+                    "id": row["id"],
+                    "title": row["title"],
+                    "messages": row["messages"] or []
+                })
+            return chats
+    except Exception:
+        pass
+
+    initial_id = f"chat_{uuid.uuid4().hex[:6]}"
+    default_chat = [{
+        "id": initial_id,
+        "title": "New Chat",
+        "messages": []
+    }]
+    save_chats_to_db(user_id, default_chat)
+    return default_chat
+
+def save_chats_to_db(user_id, chats_data):
+    try:
+        for chat in chats_data:
+            supabase.table("chats").upsert({
+                "id": chat["id"],
+                "user_id": user_id,
+                "title": chat["title"],
+                "messages": chat["messages"]
+            }).execute()
+    except Exception as e:
+        print(f"Error saving chats: {e}")
+
+def delete_chat_from_db(chat_id):
+    try:
+        supabase.table("chats").delete().eq("id", chat_id).execute()
+    except Exception as e:
+        print(f"Error deleting chat: {e}")
+
+
+# -------------------------------------------------------------------------
+# 5. SESSION STATE INITIALIZATION
 # -------------------------------------------------------------------------
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -178,20 +202,19 @@ if not st.session_state.logged_in:
             login_pass = st.text_input("Password", type="password", key="login_pass")
             
             if st.button("Log In", use_container_width=True):
-                users = load_users()
-                matched_user_id = None
+                users = fetch_all_users()
+                matched_uid = None
                 matched_data = None
                 
-                # Search for matching username & password among all registered accounts
                 for uid, udata in users.items():
                     if udata.get("username") == login_user.strip() and udata.get("password") == login_pass:
-                        matched_user_id = uid
+                        matched_uid = uid
                         matched_data = udata
                         break
                 
-                if matched_user_id:
+                if matched_uid:
                     st.session_state.logged_in = True
-                    st.session_state.user_id = matched_user_id
+                    st.session_state.user_id = matched_uid
                     st.session_state.username = matched_data.get("username")
                     st.session_state.display_name = matched_data.get("display_name", matched_data.get("username"))
                     st.success("Login successful!")
@@ -209,15 +232,8 @@ if not st.session_state.logged_in:
                 if not clean_user or not signup_pass:
                     st.warning("Please fill in all fields.")
                 else:
-                    users = load_users()
-                    # Generate a brand new unique ID for this user, allowing duplicate usernames freely
                     new_uid = uuid.uuid4().hex[:8]
-                    users[new_uid] = {
-                        "username": clean_user,
-                        "password": signup_pass,
-                        "display_name": clean_user
-                    }
-                    save_users(users)
+                    insert_user(new_uid, clean_user, signup_pass, clean_user)
                     
                     st.session_state.logged_in = True
                     st.session_state.user_id = new_uid
@@ -241,10 +257,7 @@ if st.session_state.needs_display_name:
         if st.button("Continue to Gyan", use_container_width=True):
             if preferred_name.strip():
                 st.session_state.display_name = preferred_name.strip().capitalize()
-                users = load_users()
-                if st.session_state.user_id in users:
-                    users[st.session_state.user_id]["display_name"] = st.session_state.display_name
-                    save_users(users)
+                update_user_display_name(st.session_state.user_id, st.session_state.display_name)
                 st.session_state.needs_display_name = False
                 st.rerun()
             else:
@@ -253,82 +266,26 @@ if st.session_state.needs_display_name:
 
 
 # -------------------------------------------------------------------------
-# 8. USER-SPECIFIC CHAT STORAGE (Bound to Unique User ID)
-# -------------------------------------------------------------------------
-CHATS_FILE = f"chats_{st.session_state.user_id}.json"
-
-def load_chats():
-    if os.path.exists(CHATS_FILE):
-        try:
-            with open(CHATS_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                if data:
-                    return data
-        except Exception:
-            pass
-
-    initial_id = f"chat_{uuid.uuid4().hex[:6]}"
-    return [{
-        "id": initial_id,
-        "title": "New Chat",
-        "messages": []
-    }]
-
-def save_chats(chats_data):
-    try:
-        with open(CHATS_FILE, "w", encoding="utf-8") as f:
-            json.dump(chats_data, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print(f"Error saving chats: {e}")
-
-
-# -------------------------------------------------------------------------
-# 9. MATH & TABLE REPAIR CLEANER
+# 8. MATH & TABLE REPAIR CLEANER
 # -------------------------------------------------------------------------
 def clean_math_syntax(text):
     if not text:
         return ""
-
     text = str(text)
-
-    # Convert \[ ... \] to $$ ... $$
-    text = re.sub(
-        r'\\\[\s*(.*?)\s*\\\]',
-        lambda m: "\n\n$$\n" + m.group(1).strip() + "\n$$\n\n",
-        text,
-        flags=re.DOTALL
-    )
-
-    # Convert \( ... \) to $ ... $
-    text = re.sub(
-        r'\\\(\s*(.*?)\s*\\\)',
-        lambda m: "$" + m.group(1).strip() + "$",
-        text,
-        flags=re.DOTALL
-    )
-
-    # Fix broken table rows where math equations introduced unescaped line breaks
-    def fix_table_row(match):
-        row = match.group(0)
-        return row.replace('\n', ' ')
-
-    text = re.sub(r'\|.*\|', fix_table_row, text)
-
-    # Ensure display equations are separated from text cleanly
+    text = re.sub(r'\\\[\s*(.*?)\s*\\\]', lambda m: "\n\n$$\n" + m.group(1).strip() + "\n$$\n\n", text, flags=re.DOTALL)
+    text = re.sub(r'\\\(\s*(.*?)\s*\\\)', lambda m: "$" + m.group(1).strip() + "$", text, flags=re.DOTALL)
+    text = re.sub(r'\|.*\|', lambda m: m.group(0).replace('\n', ' '), text)
     text = re.sub(r'(?<!\n)\$\$', '\n\n$$', text)
     text = re.sub(r'\$\$(?!\n)', '$$\n\n', text)
-
-    # Remove excessive blank lines
     text = re.sub(r'\n{4,}', '\n\n\n', text)
-
     return text.strip()
 
 
 # -------------------------------------------------------------------------
-# 10. SESSION STATE INITIALIZATION
+# 9. SESSION STATE INITIALIZATION FOR CHATS
 # -------------------------------------------------------------------------
 if "chats" not in st.session_state:
-    st.session_state.chats = load_chats()
+    st.session_state.chats = load_chats_from_db(st.session_state.user_id)
 
 if "active_chat_id" not in st.session_state:
     st.session_state.active_chat_id = st.session_state.chats[0]["id"]
@@ -341,7 +298,7 @@ def get_active_chat():
 
 
 # -------------------------------------------------------------------------
-# 11. SIDEBAR
+# 10. SIDEBAR
 # -------------------------------------------------------------------------
 with st.sidebar:
     st.markdown("<div class='sidebar-title'>gyan</div>", unsafe_allow_html=True)
@@ -377,16 +334,13 @@ with st.sidebar:
 
     if st.button("➕ New Chat", use_container_width=True):
         new_id = f"chat_{uuid.uuid4().hex[:6]}"
-        st.session_state.chats.insert(
-            0,
-            {
-                "id": new_id,
-                "title": "New Chat",
-                "messages": []
-            }
-        )
+        st.session_state.chats.insert(0, {
+            "id": new_id,
+            "title": "New Chat",
+            "messages": []
+        })
         st.session_state.active_chat_id = new_id
-        save_chats(st.session_state.chats)
+        save_chats_to_db(st.session_state.user_id, st.session_state.chats)
         st.rerun()
 
     st.markdown("---")
@@ -404,9 +358,8 @@ with st.sidebar:
 
         with col2:
             if st.button("🗑️", key=f"del_{chat['id']}", use_container_width=True, help="Delete chat"):
-                st.session_state.chats = [
-                    c for c in st.session_state.chats if c["id"] != chat["id"]
-                ]
+                delete_chat_from_db(chat["id"])
+                st.session_state.chats = [c for c in st.session_state.chats if c["id"] != chat["id"]]
                 if not st.session_state.chats:
                     new_id = f"chat_{uuid.uuid4().hex[:6]}"
                     st.session_state.chats = [{
@@ -416,7 +369,7 @@ with st.sidebar:
                     }]
                 if st.session_state.active_chat_id == chat["id"]:
                     st.session_state.active_chat_id = st.session_state.chats[0]["id"]
-                save_chats(st.session_state.chats)
+                save_chats_to_db(st.session_state.user_id, st.session_state.chats)
                 st.rerun()
 
     st.markdown("---")
@@ -479,14 +432,13 @@ with st.sidebar:
 
 
 # -------------------------------------------------------------------------
-# 12. MAIN HEADER WITH DYNAMIC DISPLAY NAME
+# 11. MAIN HEADER & CHAT INTERFACE
 # -------------------------------------------------------------------------
 st.markdown("<div class='brand-title'>gyan</div>", unsafe_allow_html=True)
 current_name = st.session_state.display_name or st.session_state.username.capitalize()
 
 active_chat = get_active_chat()
 
-# Display intro banner ONLY if the current chat has no messages yet
 if not active_chat["messages"]:
     st.markdown(
         f"""
@@ -519,7 +471,7 @@ for message in active_chat["messages"]:
 
 
 # -------------------------------------------------------------------------
-# 13. CHAT INPUT
+# 12. CHAT INPUT
 # -------------------------------------------------------------------------
 if prompt := st.chat_input("Ask an exam derivation, technical problem, or chat with your coach..."):
     active_chat["messages"].append({
@@ -530,7 +482,7 @@ if prompt := st.chat_input("Ask an exam derivation, technical problem, or chat w
     if active_chat["title"] == "New Chat":
         active_chat["title"] = prompt[:25] + ("..." if len(prompt) > 25 else "")
 
-    save_chats(st.session_state.chats)
+    save_chats_to_db(st.session_state.user_id, st.session_state.chats)
 
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -572,5 +524,5 @@ if prompt := st.chat_input("Ask an exam derivation, technical problem, or chat w
             "content": response_text
         })
 
-        save_chats(st.session_state.chats)
+        save_chats_to_db(st.session_state.user_id, st.session_state.chats)
         st.rerun()

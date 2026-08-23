@@ -171,7 +171,7 @@ def delete_chat_from_db(chat_id):
 
 
 # -------------------------------------------------------------------------
-# 5. SESSION STATE INITIALIZATION
+# 5. SESSION STATE & PERSISTENT LOGIN RECOVERY (QUERY PARAMS)
 # -------------------------------------------------------------------------
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -183,6 +183,20 @@ if "display_name" not in st.session_state:
     st.session_state.display_name = None
 if "needs_display_name" not in st.session_state:
     st.session_state.needs_display_name = False
+if "confirm_logout" not in st.session_state:
+    st.session_state.confirm_logout = False
+
+# Auto-restore session from URL query parameters on page refresh
+if not st.session_state.logged_in:
+    qp_user_id = st.query_params.get("user_id")
+    qp_username = st.query_params.get("username")
+    if qp_user_id and qp_username:
+        users = fetch_all_users()
+        if qp_user_id in users:
+            st.session_state.logged_in = True
+            st.session_state.user_id = qp_user_id
+            st.session_state.username = qp_username
+            st.session_state.display_name = users[qp_user_id].get("display_name", qp_username)
 
 
 # -------------------------------------------------------------------------
@@ -217,6 +231,10 @@ if not st.session_state.logged_in:
                     st.session_state.user_id = matched_uid
                     st.session_state.username = matched_data.get("username")
                     st.session_state.display_name = matched_data.get("display_name", matched_data.get("username"))
+                    
+                    st.query_params["user_id"] = matched_uid
+                    st.query_params["username"] = matched_data.get("username")
+                    
                     st.success("Login successful!")
                     st.rerun()
                 else:
@@ -239,6 +257,9 @@ if not st.session_state.logged_in:
                     st.session_state.user_id = new_uid
                     st.session_state.username = clean_user
                     st.session_state.needs_display_name = True
+                    
+                    st.query_params["user_id"] = new_uid
+                    st.query_params["username"] = clean_user
                     st.rerun()
     st.stop()
 
@@ -318,16 +339,31 @@ with st.sidebar:
         unsafe_allow_html=True
     )
 
-    if st.button("🚪 Log Out", use_container_width=True):
-        st.session_state.logged_in = False
-        st.session_state.user_id = None
-        st.session_state.username = None
-        st.session_state.display_name = None
-        if "chats" in st.session_state:
-            del st.session_state.chats
-        if "active_chat_id" in st.session_state:
-            del st.session_state.active_chat_id
-        st.rerun()
+    # Logout Flow with Confirmation Prompt
+    if not st.session_state.confirm_logout:
+        if st.button("🚪 Log Out", use_container_width=True):
+            st.session_state.confirm_logout = True
+            st.rerun()
+    else:
+        st.warning("Are you sure you want to log out?")
+        col_yes, col_no = st.columns(2)
+        with col_yes:
+            if st.button("Yes", use_container_width=True):
+                st.session_state.logged_in = False
+                st.session_state.user_id = None
+                st.session_state.username = None
+                st.session_state.display_name = None
+                st.session_state.confirm_logout = False
+                st.query_params.clear()
+                if "chats" in st.session_state:
+                    del st.session_state.chats
+                if "active_chat_id" in st.session_state:
+                    del st.session_state.active_chat_id
+                st.rerun()
+        with col_no:
+            if st.button("Cancel", use_container_width=True):
+                st.session_state.confirm_logout = False
+                st.rerun()
 
     st.markdown("---")
     st.markdown("### 💬 CHAT HISTORY")

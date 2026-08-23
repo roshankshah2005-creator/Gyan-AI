@@ -327,9 +327,9 @@ with st.sidebar:
     )
 
     base_creator_instruction = (
-        "CRITICAL RULE ABOUT YOUR CREATOR:\n"
+        "CRITICAL RULE ABOUT YOUR CREATOR & DEVELOPER:\n"
         "Whenever anyone asks who created you, who built you, who made you, or who your developer is, "
-        "you must always state that you were created by Roshan Kumar Sah, a B.Tech student.\n\n"
+        "you must always state that you were created by Roshan Kumar Sah, a B.Tech student studying Chemical Engineering at the National Institute of Technology (NIT) Durgapur.\n\n"
     )
 
     system_instructions = {

@@ -107,7 +107,8 @@ def fetch_all_users():
     try:
         res = supabase.table("users").select("*").execute()
         return {row["id"]: row for row in res.data}
-    except Exception:
+    except Exception as e:
+        print(f"Error fetching users: {e}")
         return {}
 
 def insert_user(user_id, username, password, display_name):
@@ -118,8 +119,10 @@ def insert_user(user_id, username, password, display_name):
             "password": password,
             "display_name": display_name
         }).execute()
+        return True
     except Exception as e:
-        print(f"Error inserting user: {e}")
+        st.error(f"Supabase Insert Error: {e}")
+        return False
 
 def update_user_password(user_id, new_password):
     try:
@@ -267,16 +270,17 @@ if not st.session_state.logged_in:
                         st.warning("Please fill in all fields.")
                     else:
                         new_uid = uuid.uuid4().hex[:8]
-                        insert_user(new_uid, clean_user, signup_pass, clean_user)
+                        success = insert_user(new_uid, clean_user, signup_pass, clean_user)
                         
-                        st.session_state.logged_in = True
-                        st.session_state.user_id = new_uid
-                        st.session_state.username = clean_user
-                        st.session_state.needs_display_name = True
-                        
-                        st.query_params["user_id"] = new_uid
-                        st.query_params["username"] = clean_user
-                        st.rerun()
+                        if success:
+                            st.session_state.logged_in = True
+                            st.session_state.user_id = new_uid
+                            st.session_state.username = clean_user
+                            st.session_state.needs_display_name = True
+                            
+                            st.query_params["user_id"] = new_uid
+                            st.query_params["username"] = clean_user
+                            st.rerun()
         else:
             st.subheader("🔒 Reset Password")
             reset_user = st.text_input("Enter your Username", key="reset_user")

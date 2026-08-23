@@ -121,6 +121,14 @@ def insert_user(user_id, username, password, display_name):
     except Exception as e:
         print(f"Error inserting user: {e}")
 
+def update_user_password(user_id, new_password):
+    try:
+        supabase.table("users").update({"password": new_password}).eq("id", user_id).execute()
+        return True
+    except Exception as e:
+        print(f"Error updating password: {e}")
+        return False
+
 def update_user_display_name(user_id, display_name):
     try:
         supabase.table("users").update({"display_name": display_name}).eq("id", user_id).execute()
@@ -171,7 +179,7 @@ def delete_chat_from_db(chat_id):
 
 
 # -------------------------------------------------------------------------
-# 5. SESSION STATE & PERSISTENT LOGIN RECOVERY (QUERY PARAMS)
+# 5. SESSION STATE & PERSISTENT LOGIN RECOVERY
 # -------------------------------------------------------------------------
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -185,11 +193,14 @@ if "needs_display_name" not in st.session_state:
     st.session_state.needs_display_name = False
 if "confirm_logout" not in st.session_state:
     st.session_state.confirm_logout = False
+if "forgot_password_mode" not in st.session_state:
+    st.session_state.forgot_password_mode = False
 
-# Auto-restore session from URL query parameters on page refresh
+# Auto-restore session from URL query parameters across refreshes
 if not st.session_state.logged_in:
     qp_user_id = st.query_params.get("user_id")
     qp_username = st.query_params.get("username")
+    
     if qp_user_id and qp_username:
         users = fetch_all_users()
         if qp_user_id in users:
@@ -200,7 +211,7 @@ if not st.session_state.logged_in:
 
 
 # -------------------------------------------------------------------------
-# 6. AUTHENTICATION SCREEN (Login / Sign Up)
+# 6. AUTHENTICATION SCREEN (Login / Sign Up / Forgot Password)
 # -------------------------------------------------------------------------
 if not st.session_state.logged_in:
     st.markdown("<div class='brand-title' style='margin-top: 50px;'>gyan</div>", unsafe_allow_html=True)
@@ -208,59 +219,98 @@ if not st.session_state.logged_in:
     
     col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
-        tab_login, tab_signup = st.tabs(["🔑 Log In", "📝 Sign Up"])
-        
-        with tab_login:
-            st.subheader("Welcome Back")
-            login_user = st.text_input("Username", key="login_user")
-            login_pass = st.text_input("Password", type="password", key="login_pass")
+        if not st.session_state.forgot_password_mode:
+            tab_login, tab_signup = st.tabs(["🔑 Log In", "📝 Sign Up"])
             
-            if st.button("Log In", use_container_width=True):
-                users = fetch_all_users()
-                matched_uid = None
-                matched_data = None
+            with tab_login:
+                st.subheader("Welcome Back")
+                login_user = st.text_input("Username", key="login_user")
+                login_pass = st.text_input("Password", type="password", key="login_pass")
                 
-                for uid, udata in users.items():
-                    if udata.get("username") == login_user.strip() and udata.get("password") == login_pass:
-                        matched_uid = uid
-                        matched_data = udata
-                        break
+                if st.button("Log In", use_container_width=True):
+                    users = fetch_all_users()
+                    matched_uid = None
+                    matched_data = None
+                    
+                    for uid, udata in users.items():
+                        if udata.get("username") == login_user.strip() and udata.get("password") == login_pass:
+                            matched_uid = uid
+                            matched_data = udata
+                            break
+                    
+                    if matched_uid:
+                        st.session_state.logged_in = True
+                        st.session_state.user_id = matched_uid
+                        st.session_state.username = matched_data.get("username")
+                        st.session_state.display_name = matched_data.get("display_name", matched_data.get("username"))
+                        
+                        st.query_params["user_id"] = matched_uid
+                        st.query_params["username"] = matched_data.get("username")
+                        
+                        st.success("Login successful!")
+                        st.rerun()
+                    else:
+                        st.error("Invalid username or password.")
                 
-                if matched_uid:
-                    st.session_state.logged_in = True
-                    st.session_state.user_id = matched_uid
-                    st.session_state.username = matched_data.get("username")
-                    st.session_state.display_name = matched_data.get("display_name", matched_data.get("username"))
-                    
-                    st.query_params["user_id"] = matched_uid
-                    st.query_params["username"] = matched_data.get("username")
-                    
-                    st.success("Login successful!")
+                if st.button("Forgot Password?", use_container_width=True, type="tertiary"):
+                    st.session_state.forgot_password_mode = True
                     st.rerun()
-                else:
-                    st.error("Invalid username or password.")
-        
-        with tab_signup:
-            st.subheader("Create an Account")
-            signup_user = st.text_input("Choose Username", key="signup_user")
-            signup_pass = st.text_input("Choose Password", type="password", key="signup_pass")
             
-            if st.button("Sign Up", use_container_width=True):
-                clean_user = signup_user.strip()
-                if not clean_user or not signup_pass:
+            with tab_signup:
+                st.subheader("Create an Account")
+                signup_user = st.text_input("Choose Username", key="signup_user")
+                signup_pass = st.text_input("Choose Password", type="password", key="signup_pass")
+                
+                if st.button("Sign Up", use_container_width=True):
+                    clean_user = signup_user.strip()
+                    if not clean_user or not signup_pass:
+                        st.warning("Please fill in all fields.")
+                    else:
+                        new_uid = uuid.uuid4().hex[:8]
+                        insert_user(new_uid, clean_user, signup_pass, clean_user)
+                        
+                        st.session_state.logged_in = True
+                        st.session_state.user_id = new_uid
+                        st.session_state.username = clean_user
+                        st.session_state.needs_display_name = True
+                        
+                        st.query_params["user_id"] = new_uid
+                        st.query_params["username"] = clean_user
+                        st.rerun()
+        else:
+            st.subheader("🔒 Reset Password")
+            reset_user = st.text_input("Enter your Username", key="reset_user")
+            new_pass = st.text_input("Enter New Password", type="password", key="new_pass")
+            confirm_pass = st.text_input("Confirm New Password", type="password", key="confirm_pass")
+            
+            if st.button("Update Password", use_container_width=True):
+                clean_reset_user = reset_user.strip()
+                if not clean_reset_user or not new_pass or not confirm_pass:
                     st.warning("Please fill in all fields.")
+                elif new_pass != confirm_pass:
+                    st.error("New passwords do not match.")
                 else:
-                    new_uid = uuid.uuid4().hex[:8]
-                    insert_user(new_uid, clean_user, signup_pass, clean_user)
+                    users = fetch_all_users()
+                    matched_uid = None
+                    for uid, udata in users.items():
+                        if udata.get("username") == clean_reset_user:
+                            matched_uid = uid
+                            break
                     
-                    st.session_state.logged_in = True
-                    st.session_state.user_id = new_uid
-                    st.session_state.username = clean_user
-                    st.session_state.needs_display_name = True
-                    
-                    st.query_params["user_id"] = new_uid
-                    st.query_params["username"] = clean_user
-                    st.rerun()
+                    if matched_uid:
+                        success = update_user_password(matched_uid, new_pass)
+                        if success:
+                            st.success("Password updated successfully! Please log in with your new password.")
+                            st.session_state.forgot_password_mode = False
+                            st.rerun()
+                        else:
+                            st.error("Database error updating password.")
+                    else:
+                        st.error("Username not found.")
+            
+            if st.button("Back to Login", use_container_width=True):
+                st.session_state.forgot_password_mode = False
+                st.rerun()
     st.stop()
 
 

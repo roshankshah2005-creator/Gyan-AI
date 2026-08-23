@@ -112,7 +112,24 @@ def get_user_ip():
 
 
 # -------------------------------------------------------------------------
-# 5. DATABASE HELPER FUNCTIONS (SUPABASE)
+# 5. SESSION STATE & EARLY URL RECOVERY (FIXES REFRESH WIPE)
+# -------------------------------------------------------------------------
+if "user_id" not in st.session_state:
+    st.session_state.user_id = None
+if "display_name" not in st.session_state:
+    st.session_state.display_name = None
+
+# Grab parameters instantly from URL query string on startup/refresh
+qp_user_id = st.query_params.get("user_id")
+qp_name = st.query_params.get("name")
+
+if qp_user_id and qp_name:
+    st.session_state.user_id = qp_user_id
+    st.session_state.display_name = qp_name
+
+
+# -------------------------------------------------------------------------
+# 6. DATABASE HELPER FUNCTIONS (SUPABASE)
 # -------------------------------------------------------------------------
 def load_chats_from_db(user_id):
     try:
@@ -160,23 +177,6 @@ def delete_chat_from_db(chat_id):
 
 
 # -------------------------------------------------------------------------
-# 6. SESSION STATE & USER IDENTITY (NAME ENTRY)
-# -------------------------------------------------------------------------
-if "user_id" not in st.session_state:
-    st.session_state.user_id = None
-if "display_name" not in st.session_state:
-    st.session_state.display_name = None
-
-# Auto-restore identity from URL query parameters across refreshes
-if not st.session_state.display_name:
-    qp_user_id = st.query_params.get("user_id")
-    qp_name = st.query_params.get("name")
-    if qp_user_id and qp_name:
-        st.session_state.user_id = qp_user_id
-        st.session_state.display_name = qp_name
-
-
-# -------------------------------------------------------------------------
 # 7. "WHAT SHOULD I CALL YOU?" WELCOME SCREEN
 # -------------------------------------------------------------------------
 if not st.session_state.display_name:
@@ -193,7 +193,7 @@ if not st.session_state.display_name:
                 st.session_state.display_name = clean_name.capitalize()
                 st.session_state.user_id = uuid.uuid4().hex[:8]
                 
-                # Save identity in URL query params so refreshes keep the name
+                # Save identity in URL query params
                 st.query_params["user_id"] = st.session_state.user_id
                 st.query_params["name"] = st.session_state.display_name
                 st.rerun()

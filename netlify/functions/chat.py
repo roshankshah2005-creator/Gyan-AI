@@ -1,22 +1,29 @@
-import os
 import json
-from flask import Flask, request, jsonify  # Or adapt to your Python framework (FastAPI, etc.)
+import os
 import urllib.request
+import urllib.error
 
-app = Flask(__name__)
+def handler(event, context):
+    # Only allow POST
+    if event.get("httpMethod") != "POST":
+        return {
+            "statusCode": 405,
+            "body": json.dumps({"error": "Method Not Allowed"})
+        }
 
-@app.route('/chat', methods=['POST'])
-def chat():
     try:
-        data = request.get_json()
-        messages = data.get('messages', [])
-        persona = data.get('persona', 'Exam Prep Coach')
-        
-        api_key = os.environ.get('OPENROUTER_API_KEY')
-        if not api_key:
-            return jsonify({'reply': 'Server configuration error: Missing OpenRouter API Key.'}), 500
+        body = json.loads(event.get("body", "{}"))
+        messages = body.get("messages", [])
+        persona = body.get("persona", "Exam Prep Coach")
+        api_key = os.environ.get("OPENROUTER_API_KEY")
 
-        # Define system prompts based on your personas
+        if not api_key:
+            return {
+                "statusCode": 500,
+                "body": json.dumps({"reply": "Server error: OPENROUTER_API_KEY is missing in Netlify settings."})
+            }
+
+        # System persona prompt
         system_prompt = "You are Gyan, an intelligent multi-persona AI companion."
         if persona == 'Exam Prep Coach':
             system_prompt = "You are an expert Exam Prep Coach, helping students break down derivations, concepts, and study schedules clearly."
@@ -29,37 +36,50 @@ def chat():
         elif persona == 'Creative Director':
             system_prompt = "You are a Creative Director focusing on design principles, typography, and visual aesthetics."
 
-        formatted_messages = [{'role': 'system', 'content': system_prompt}] + messages
+        formatted_messages = [{"role": "system", "content": system_prompt}] + messages
 
-        # Call OpenRouter API
         payload = json.dumps({
             "model": "meta-llama/llama-3-8b-instruct:free",
             "messages": formatted_messages
-        }).encode('utf-8')
+        }).encode("utf-8")
 
         req = urllib.request.Request(
             "https://openrouter.ai/api/v1/chat/completions",
             data=payload,
             headers={
                 "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
                 "HTTP-Referer": "https://your-site.netlify.app",
-                "X-Title": "Gyan AI",
-                "Content-Type": "application/json"
+                "X-Title": "Gyan AI"
             },
             method="POST"
         )
 
         with urllib.request.urlopen(req) as response:
-            res_data = json.loads(response.read().decode('utf-8'))
-            
-            if 'error' in res_data:
-                return jsonify({'reply': 'AI Error: ' + res_data['error'].get('message', 'Unknown error')}), 400
+            res_data = json.loads(response.read().decode("utf-8"))
 
-            reply = res_data['choices'][0]['message']['content'] if res_data.get('choices') else 'No response generated.'
-            return jsonify({'reply': reply})
+            if "error" in res_data:
+                return {
+                    "statusCode": 400,
+                    "body": json.dumps({"reply": "AI Error: " + res_data["error"].get("message", "Unknown error")})
+                }
 
+            reply = res_data["choices"][0]["message"]["content"] if res_data.get("choices") else "No response generated."
+
+            return {
+                "statusCode": 200,
+                "headers": { "Content-Type": "application/json" },
+                "body": json.dumps({"reply": reply})
+            }
+
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode("utf-8")
+        return {
+            "statusCode": e.code,
+            "body": json.dumps({"reply": f"API Error: {err_body}"})
+        }
     except Exception as e:
-        return jsonify({'reply': 'Server error: ' + str(e)}), 500
-
-if __name__ == '__main__':
-    app.run(port=5000)
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"reply": f"Server error: {str(e)}"})
+        }

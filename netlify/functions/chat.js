@@ -34,8 +34,8 @@ exports.handler = async function(event, context) {
                 "HTTP-Referer": "https://your-site.netlify.app",
                 "X-Title": "Gyan AI"
             },
-            body: JSON.stringify({
-                model: "meta-llama/llama-3-8b-instruct:free",
+           body: JSON.stringify({
+                model: "openrouter/free", 
                 messages: formattedMessages
             })
         });

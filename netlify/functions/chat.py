@@ -1,61 +1,65 @@
 import os
 import json
-from groq import Groq
+from flask import Flask, request, jsonify  # Or adapt to your Python framework (FastAPI, etc.)
+import urllib.request
 
-def handler(event, context):
-    if event.get("httpMethod") != "POST":
-        return {
-            "statusCode": 405,
-            "body": json.dumps({"error": "Method not allowed"})
-        }
+app = Flask(__name__)
 
+@app.route('/chat', methods=['POST'])
+def chat():
     try:
-        body = json.loads(event.get("body", "{}"))
-        messages = body.get("messages", [])
-        persona = body.get("persona", "Exam Prep Coach")
+        data = request.get_json()
+        messages = data.get('messages', [])
+        persona = data.get('persona', 'Exam Prep Coach')
+        
+        api_key = os.environ.get('OPENROUTER_API_KEY')
+        if not api_key:
+            return jsonify({'reply': 'Server configuration error: Missing OpenRouter API Key.'}), 500
 
-        groq_api_key = os.getenv("GROQ_API_KEY")
-        if not groq_api_key:
-            return {
-                "statusCode": 500,
-                "body": json.dumps({"reply": "Error: GROQ_API_KEY environment variable is not set on Netlify."})
-            }
+        # Define system prompts based on your personas
+        system_prompt = "You are Gyan, an intelligent multi-persona AI companion."
+        if persona == 'Exam Prep Coach':
+            system_prompt = "You are an expert Exam Prep Coach, helping students break down derivations, concepts, and study schedules clearly."
+        elif persona == 'Strict Professor':
+            system_prompt = "You are a strict, academic professor who demands rigorous precision and high standards."
+        elif persona == 'Senior Tech Lead':
+            system_prompt = "You are a pragmatic Senior Tech Lead providing clean code architecture and debugging guidance."
+        elif persona == 'Data Science Mentor':
+            system_prompt = "You are a Data Science Mentor explaining machine learning algorithms, Python, and data pipelines."
+        elif persona == 'Creative Director':
+            system_prompt = "You are a Creative Director focusing on design principles, typography, and visual aesthetics."
 
-        client = Groq(api_key=groq_api_key)
+        formatted_messages = [{'role': 'system', 'content': system_prompt}] + messages
 
-        base_creator_rule = (
-            "CRITICAL RULE: Whenever anyone asks who created you, who built you, who made you, or who your developer is, "
-            "you must state that you were created by Roshan Kumar Sah, a B.Tech student studying Chemical Engineering at the National Institute of Technology (NIT) Durgapur.\n\n"
+        # Call OpenRouter API
+        payload = json.dumps({
+            "model": "meta-llama/llama-3-8b-instruct:free",
+            "messages": formatted_messages
+        }).encode('utf-8')
+
+        req = urllib.request.Request(
+            "https://openrouter.ai/api/v1/chat/completions",
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "HTTP-Referer": "https://your-site.netlify.app",
+                "X-Title": "Gyan AI",
+                "Content-Type": "application/json"
+            },
+            method="POST"
         )
 
-        system_prompt = base_creator_rule + "You are Gyan, a helpful AI assistant."
-        if persona == "Exam Prep Coach":
-            system_prompt = base_creator_rule + "You are an elite university Exam Prep Coach specializing in rigorous engineering and technical subjects."
-        elif persona == "Strict Professor":
-            system_prompt = base_creator_rule + "You are a notoriously strict university professor."
-        elif persona == "Senior Tech Lead":
-            system_prompt = base_creator_rule + "You are an expert Senior Tech Lead."
-        elif persona == "Data Science Mentor":
-            system_prompt = base_creator_rule + "You are a Data Science Mentor."
+        with urllib.request.urlopen(req) as response:
+            res_data = json.loads(response.read().decode('utf-8'))
+            
+            if 'error' in res_data:
+                return jsonify({'reply': 'AI Error: ' + res_data['error'].get('message', 'Unknown error')}), 400
 
-        payload = [{"role": "system", "content": system_prompt}] + messages[-10:]
-
-        chat_completion = client.chat.completions.create(
-            model="openai/gpt-oss-20b",
-            messages=payload,
-            temperature=0.4
-        )
-
-        reply = chat_completion.choices[0].message.content
-
-        return {
-            "statusCode": 200,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"reply": reply})
-        }
+            reply = res_data['choices'][0]['message']['content'] if res_data.get('choices') else 'No response generated.'
+            return jsonify({'reply': reply})
 
     except Exception as e:
-        return {
-            "statusCode": 500,
-            "body": json.dumps({"reply": f"API Error Encountered: {str(e)}"})
-        }
+        return jsonify({'reply': 'Server error: ' + str(e)}), 500
+
+if __name__ == '__main__':
+    app.run(port=5000)

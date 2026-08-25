@@ -84,51 +84,43 @@
     </main>
 
     <script>
-        // ⚠️ REPLACE WITH YOUR ACTUAL SUPABASE CREDENTIALS ⚠️
-        const SUPABASE_URL = "https://wpactrrgxmitgregzbiq.supabase.co/rest/v1/";
-        const SUPABASE_KEY = "sb_secret_NhUzj5ta6byX2JMxubh04g_tyMb2N3V";
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        // ⚠️ REPLACE WITH YOUR ACTUAL SUPABASE URL AND ANON KEY ⚠️
+        const SUPABASE_URL = "YOUR_SUPABASE_URL";
+        const SUPABASE_KEY = "YOUR_SUPABASE_ANON_KEY";
+        
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-        let currentUserId = null;
-        let currentUsername = null;
+        let currentUserId = localStorage.getItem('gyan_uid');
+        let currentUsername = localStorage.getItem('gyan_uname');
         let chats = [];
         let activeChatId = null;
 
         document.addEventListener("DOMContentLoaded", () => {
-            // Tab Switchers
             document.getElementById('tab-login-btn').addEventListener('click', () => switchTab('login'));
             document.getElementById('tab-signup-btn').addEventListener('click', () => switchTab('signup'));
 
-            // Auth Buttons
             document.getElementById('login-submit-btn').addEventListener('click', handleLogin);
             document.getElementById('signup-submit-btn').addEventListener('click', handleSignup);
             document.getElementById('logout-btn').addEventListener('click', handleLogout);
 
-            // Chat Actions
             document.getElementById('new-chat-btn').addEventListener('click', createNewChat);
             document.getElementById('send-btn').addEventListener('click', sendMessage);
             document.getElementById('chat-input').addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') sendMessage();
             });
 
-            checkSession();
-        });
-
-        async function checkSession() {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session) {
-                currentUserId = session.user.id;
-                currentUsername = session.user.user_metadata.username || session.user.email.split('@')[0];
+            if (currentUserId && currentUsername) {
                 document.getElementById('auth-modal').style.display = 'none';
                 initApp();
             }
-        }
+        });
 
         function switchTab(tab) {
+            document.getElementById('auth-error').innerText = '';
             if (tab === 'login') {
                 document.getElementById('login-form').style.display = 'block';
                 document.getElementById('signup-form').style.display = 'none';
-                document.getElementById('tab-login-btn').className = "flex-1 pb-2 font-bold text-teal-400 border-b-2 border-teal-400 text-sm";
+                document.getElementById('tab-login-btnclassName = "flex-1 pb-2 font-bold text-teal-400 border-b-2 border-teal-400 text-sm";
                 document.getElementById('tab-signup-btn').className = "flex-1 pb-2 font-bold text-gray-500 text-sm";
             } else {
                 document.getElementById('login-form').style.display = 'none';
@@ -141,10 +133,16 @@
         async function handleLogin() {
             const email = document.getElementById('login-email').value.trim();
             const password = document.getElementById('login-password').value;
-            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+            document.getElementById('auth-error').innerText = 'Logging in...';
+
+            const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
             if (error) {
                 document.getElementById('auth-error').innerText = error.message;
             } else {
+                currentUserId = data.user.id;
+                currentUsername = data.user.user_metadata.username || email.split('@')[0];
+                localStorage.setItem('gyan_uid', currentUserId);
+                localStorage.setItem('gyan_uname', currentUsername);
                 location.reload();
             }
         }
@@ -153,21 +151,32 @@
             const username = document.getElementById('signup-username').value.trim();
             const email = document.getElementById('signup-email').value.trim();
             const password = document.getElementById('signup-password').value;
-            const { data, error } = await supabase.auth.signUp({
+            
+            if (!username || !email || !password) {
+                document.getElementById('auth-error').innerText = 'Please fill in all fields.';
+                return;
+            }
+            document.getElementById('auth-error').innerText = 'Creating account...';
+
+            const { data, error } = await supabaseClient.auth.signUp({
                 email,
                 password,
                 options: { data: { username } }
             });
+
             if (error) {
                 document.getElementById('auth-error').innerText = error.message;
             } else {
                 alert('Account created successfully! You can now log in.');
                 switchTab('login');
+                document.getElementById('auth-error').innerText = '';
             }
         }
 
-        async function handleLogout() {
-            await supabase.auth.signOut();
+        function handleLogout() {
+            localStorage.removeItem('gyan_uid');
+            localStorage.removeItem('gyan_uname');
+            supabaseClient.auth.signOut();
             location.reload();
         }
 
@@ -178,7 +187,7 @@
         }
 
         async function loadChats() {
-            const { data } = await supabase.from('chats').select('*').eq('user_id', currentUserId).order('updated_at', { ascending: false });
+            const { data } = await supabaseClient.from('chats').select('*').eq('user_id', currentUserId);
             if (data && data.length > 0) {
                 chats = data;
                 activeChatId = chats[0].id;
@@ -194,7 +203,7 @@
 
         async function saveChatsToDb() {
             for (const chat of chats) {
-                await supabase.from('chats').upsert({
+                await supabaseClient.from('chats').upsert({
                     id: chat.id,
                     user_id: currentUserId,
                     title: chat.title,
@@ -275,7 +284,7 @@
                 await saveChatsToDb();
                 renderChat();
             } catch (err) {
-                activeChat.messages.push({ role: 'assistant', content: 'Error communicating with Groq API.' });
+                activeChat.messages.push({ role: 'assistant', content: 'Error communicating with server.' });
                 renderChat();
             }
         }

@@ -35,7 +35,7 @@ exports.handler = async function(event, context) {
                 "X-Title": "Gyan AI"
             },
             body: JSON.stringify({
-                model: "openrouter/free", // Automatically routes to the healthiest active free model
+                model: "openai/gpt-oss-20b:free", // Stable free general model on OpenRouter
                 messages: formattedMessages
             })
         });

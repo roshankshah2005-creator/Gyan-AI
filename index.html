@@ -20,15 +20,15 @@
             <p class="text-gray-400 text-xs text-center mb-6">Your Intelligent Multi-Persona AI Companion</p>
             
             <div class="flex border-b border-gray-800 mb-6">
-                <button id="tab-login-btn" class="flex-1 pb-2 font-bold text-teal-400 border-b-2 border-teal-400 text-sm">Login</button>
-                <button id="tab-signup-btn" class="flex-1 pb-2 font-bold text-gray-500 text-sm">Create Account</button>
+                <button onclick="switchTab('login')" id="tab-login-btn" class="flex-1 pb-2 font-bold text-teal-400 border-b-2 border-teal-400 text-sm">Login</button>
+                <button onclick="switchTab('signup')" id="tab-signup-btn" class="flex-1 pb-2 font-bold text-gray-500 text-sm">Create Account</button>
             </div>
 
             <!-- Login Form -->
             <div id="login-form">
                 <input type="email" id="login-email" placeholder="Email" class="w-full p-3 bg-gray-950 border border-gray-700 rounded-xl mb-3 text-white focus:outline-none focus:border-teal-400">
                 <input type="password" id="login-password" placeholder="Password" class="w-full p-3 bg-gray-950 border border-gray-700 rounded-xl mb-4 text-white focus:outline-none focus:border-teal-400">
-                <button id="login-submit-btn" class="w-full py-3 bg-teal-500 hover:bg-teal-400 text-gray-950 font-bold rounded-xl transition">Login to Gyan</button>
+                <button onclick="handleLogin()" id="login-submit-btn" class="w-full py-3 bg-teal-500 hover:bg-teal-400 text-gray-950 font-bold rounded-xl transition">Login to Gyan</button>
             </div>
 
             <!-- Signup Form -->
@@ -36,7 +36,7 @@
                 <input type="text" id="signup-username" placeholder="Username" class="w-full p-3 bg-gray-950 border border-gray-700 rounded-xl mb-3 text-white focus:outline-none focus:border-teal-400">
                 <input type="email" id="signup-email" placeholder="Email" class="w-full p-3 bg-gray-950 border border-gray-700 rounded-xl mb-3 text-white focus:outline-none focus:border-teal-400">
                 <input type="password" id="signup-password" placeholder="Password (min 6 chars)" class="w-full p-3 bg-gray-950 border border-gray-700 rounded-xl mb-4 text-white focus:outline-none focus:border-teal-400">
-                <button id="signup-submit-btn" class="w-full py-3 bg-teal-500 hover:bg-teal-400 text-gray-950 font-bold rounded-xl transition">Create Account</button>
+                <button onclick="handleSignup()" id="signup-submit-btn" class="w-full py-3 bg-teal-500 hover:bg-teal-400 text-gray-950 font-bold rounded-xl transition">Create Account</button>
             </div>
             <p id="auth-error" class="text-red-400 text-xs text-center mt-3"></p>
         </div>
@@ -47,8 +47,8 @@
         <h1 class="brand-font text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-indigo-400 text-center mb-1">gyan</h1>
         <p id="user-badge" class="text-center text-xs text-teal-400 font-semibold mb-4 uppercase">CHATTING AS: USER</p>
         
-        <button id="logout-btn" class="w-full py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-semibold rounded-lg mb-4 transition">🚪 Logout</button>
-        <button id="new-chat-btn" class="w-full py-3 bg-teal-500 hover:bg-teal-400 text-gray-950 font-bold rounded-xl mb-4 transition">➕ New Chat</button>
+        <button onclick="handleLogout()" class="w-full py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-semibold rounded-lg mb-4 transition">🚪 Logout</button>
+        <button onclick="createNewChat()" class="w-full py-3 bg-teal-500 hover:bg-teal-400 text-gray-950 font-bold rounded-xl transition">➕ New Chat</button>
 
         <div class="flex-1 overflow-y-auto space-y-2 mb-4" id="chat-history-list">
             <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Chat History</h3>
@@ -79,12 +79,11 @@
 
         <div class="p-4 bg-gray-900 border-t border-gray-800 flex gap-3">
             <input type="text" id="chat-input" placeholder="Ask an exam derivation, technical problem, or chat with your coach..." class="flex-1 p-3.5 bg-gray-950 border border-gray-700 rounded-xl text-white focus:outline-none focus:border-teal-400">
-            <button id="send-btn" class="px-6 py-3.5 bg-teal-500 hover:bg-teal-400 text-gray-950 font-bold rounded-xl transition">Send</button>
+            <button onclick="sendMessage()" class="px-6 py-3.5 bg-teal-500 hover:bg-teal-400 text-gray-950 font-bold rounded-xl transition">Send</button>
         </div>
     </main>
 
     <script>
-        // ⚠️ REPLACE WITH YOUR ACTUAL SUPABASE URL AND ANON KEY ⚠️
         const SUPABASE_URL = "YOUR_SUPABASE_URL";
         const SUPABASE_KEY = "YOUR_SUPABASE_ANON_KEY";
         
@@ -95,20 +94,7 @@
         let chats = [];
         let activeChatId = null;
 
-        document.addEventListener("DOMContentLoaded", () => {
-            document.getElementById('tab-login-btn').addEventListener('click', () => switchTab('login'));
-            document.getElementById('tab-signup-btn').addEventListener('click', () => switchTab('signup'));
-
-            document.getElementById('login-submit-btn').addEventListener('click', handleLogin);
-            document.getElementById('signup-submit-btn').addEventListener('click', handleSignup);
-            document.getElementById('logout-btn').addEventListener('click', handleLogout);
-
-            document.getElementById('new-chat-btn').addEventListener('click', createNewChat);
-            document.getElementById('send-btn').addEventListener('click', sendMessage);
-            document.getElementById('chat-input').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') sendMessage();
-            });
-
+        window.addEventListener("DOMContentLoaded", function() {
             if (currentUserId && currentUsername) {
                 document.getElementById('auth-modal').style.display = 'none';
                 initApp();
@@ -120,7 +106,7 @@
             if (tab === 'login') {
                 document.getElementById('login-form').style.display = 'block';
                 document.getElementById('signup-form').style.display = 'none';
-                document.getElementById('tab-login-btnclassName = "flex-1 pb-2 font-bold text-teal-400 border-b-2 border-teal-400 text-sm";
+                document.getElementById('tab-login-btn').className = "flex-1 pb-2 font-bold text-teal-400 border-b-2 border-teal-400 text-sm";
                 document.getElementById('tab-signup-btn').className = "flex-1 pb-2 font-bold text-gray-500 text-sm";
             } else {
                 document.getElementById('login-form').style.display = 'none';
@@ -133,9 +119,15 @@
         async function handleLogin() {
             const email = document.getElementById('login-email').value.trim();
             const password = document.getElementById('login-password').value;
+            
+            if (!email || !password) {
+                document.getElementById('auth-error').innerText = 'Please enter email and password.';
+                return;
+            }
+
             document.getElementById('auth-error').innerText = 'Logging in...';
 
-            const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+            const { data, error } = await supabaseClient.auth.signInWithPassword({ email: email, password: password });
             if (error) {
                 document.getElementById('auth-error').innerText = error.message;
             } else {
@@ -159,9 +151,9 @@
             document.getElementById('auth-error').innerText = 'Creating account...';
 
             const { data, error } = await supabaseClient.auth.signUp({
-                email,
-                password,
-                options: { data: { username } }
+                email: email,
+                password: password,
+                options: { data: { username: username } }
             });
 
             if (error) {
@@ -181,8 +173,8 @@
         }
 
         async function initApp() {
-            document.getElementById('user-badge').innerText = `CHATTING AS: ${currentUsername.toUpperCase()}`;
-            document.getElementById('greeting-title').innerText = `Hello, ${currentUsername}!`;
+            document.getElementById('user-badge').innerText = 'CHATTING AS: ' + currentUsername.toUpperCase();
+            document.getElementById('greeting-title').innerText = 'Hello, ' + currentUsername + '!';
             await loadChats();
         }
 
@@ -202,7 +194,8 @@
         }
 
         async function saveChatsToDb() {
-            for (const chat of chats) {
+            for (let i = 0; i < chats.length; i++) {
+                const chat = chats[i];
                 await supabaseClient.from('chats').upsert({
                     id: chat.id,
                     user_id: currentUserId,
@@ -224,35 +217,44 @@
         function renderSidebar() {
             const list = document.getElementById('chat-history-list');
             list.innerHTML = '<h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Chat History</h3>';
-            chats.forEach(chat => {
+            for (let i = 0; i < chats.length; i++) {
+                const chat = chats[i];
                 const isActive = chat.id === activeChatId;
                 const btn = document.createElement('button');
-                btn.className = `w-full text-left p-3 rounded-xl text-sm truncate transition ${isActive ? 'bg-gray-800 text-teal-400 font-semibold border border-gray-700' : 'text-gray-400 hover:bg-gray-850'}`;
-                btn.innerText = `📌 ${chat.title}`;
-                btn.onclick = () => { activeChatId = chat.id; renderSidebar(); renderChat(); };
+                btn.className = 'w-full text-left p-3 rounded-xl text-sm truncate transition ' + (isActive ? 'bg-gray-800 text-teal-400 font-semibold border border-gray-700' : 'text-gray-400 hover:bg-gray-850');
+                btn.innerText = '📌 ' + chat.title;
+                btn.onclick = function() {
+                    activeChatId = chat.id;
+                    renderSidebar();
+                    renderChat();
+                };
                 list.appendChild(btn);
-            });
+            }
         }
 
         function renderChat() {
             const container = document.getElementById('chat-messages');
-            const activeChat = chats.find(c => c.id === activeChatId);
+            let activeChat = null;
+            for (let i = 0; i < chats.length; i++) {
+                if (chats[i].id === activeChatId) {
+                    activeChat = chats[i];
+                    break;
+                }
+            }
+
             if (!activeChat || activeChat.messages.length === 0) {
-                container.innerHTML = `
-                    <div class="h-full flex flex-col items-center justify-center text-center">
-                        <h2 class="text-4xl font-extrabold text-teal-400 mb-2">Hello, ${currentUsername}!</h2>
-                        <p class="text-gray-400 text-sm">Ask an exam derivation, technical problem, or chat with your coach...</p>
-                    </div>`;
+                container.innerHTML = '<div class="h-full flex flex-col items-center justify-center text-center"><h2 class="text-4xl font-extrabold text-teal-400 mb-2">Hello, ' + currentUsername + '!</h2><p class="text-gray-400 text-sm">Ask an exam derivation, technical problem, or chat with your coach...</p></div>';
                 return;
             }
 
             container.innerHTML = '';
-            activeChat.messages.forEach(msg => {
+            for (let i = 0; i < activeChat.messages.length; i++) {
+                const msg = activeChat.messages[i];
                 const div = document.createElement('div');
-                div.className = `flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`;
-                div.innerHTML = `<div class="max-w-2xl p-4 rounded-2xl text-sm leading-relaxed ${msg.role === 'user' ? 'bg-teal-600 text-white rounded-br-none' : 'bg-gray-900 border border-gray-800 text-gray-200 rounded-bl-none'}">${msg.content}</div>`;
+                div.className = 'flex ' + (msg.role === 'user' ? 'justify-end' : 'justify-start');
+                div.innerHTML = '<div class="max-w-2xl p-4 rounded-2xl text-sm leading-relaxed ' + (msg.role === 'user' ? 'bg-teal-600 text-white rounded-br-none' : 'bg-gray-900 border border-gray-800 text-gray-200 rounded-bl-none') + '">' + msg.content + '</div>';
                 container.appendChild(div);
-            });
+            }
             container.scrollTop = container.scrollHeight;
         }
 
@@ -261,7 +263,14 @@
             const text = inputEl.value.trim();
             if (!text) return;
 
-            const activeChat = chats.find(c => c.id === activeChatId);
+            let activeChat = null;
+            for (let i = 0; i < chats.length; i++) {
+                if (chats[i].id === activeChatId) {
+                    activeChat = chats[i];
+                    break;
+                }
+            }
+
             activeChat.messages.push({ role: 'user', content: text });
             if (activeChat.title === 'New Chat') {
                 activeChat.title = text.substring(0, 25) + (text.length > 25 ? '...' : '');
@@ -277,7 +286,7 @@
                 const res = await fetch('/.netlify/functions/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ messages: activeChat.messages, persona })
+                    body: JSON.stringify({ messages: activeChat.messages, persona: persona })
                 });
                 const data = await res.json();
                 activeChat.messages.push({ role: 'assistant', content: data.reply });

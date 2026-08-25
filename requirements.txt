@@ -2,3 +2,4 @@ streamlit
 groq
 pypdf
 supabase
+streamlit-cookies-controller

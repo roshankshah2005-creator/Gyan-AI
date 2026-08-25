@@ -3,316 +3,340 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GYAN AI</title>
+    <title>Gyan AI - Intelligent Companion</title>
+    
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&display=swap" rel="stylesheet">
+    
+    <!-- Marked.js for Markdown Parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.js"></script>
+
+    <!-- KaTeX for LaTeX Math Rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+
     <style>
-        .brand-font { font-family: 'Orbitron', sans-serif; }
+        /* Custom styling for rendered markdown elements */
+        .message-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+            font-size: 0.95rem;
+        }
+        .message-content th, .message-content td {
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 8px 12px;
+            text-align: left;
+        }
+        .message-content th {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .message-content ul, .message-content ol {
+            padding-left: 20px;
+            margin: 8px 0;
+            list-style-type: disc;
+        }
+        .message-content ol {
+            list-style-type: decimal;
+        }
+        .message-content p {
+            margin-bottom: 8px;
+            line-height: 1.6;
+        }
+        .message-content pre {
+            background: #1e1e1e;
+            padding: 12px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        .message-content code {
+            font-family: monospace;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 2px 4px;
+            border-radius: 4px;
+        }
     </style>
 </head>
-<body class="bg-gray-950 text-white h-screen flex overflow-hidden">
+<body class="bg-gray-950 text-gray-100 flex h-screen overflow-hidden">
 
-    <!-- Auth Modal (Login / Signup) -->
-    <div id="auth-modal" class="fixed inset-0 bg-gray-950 flex items-center justify-center z-50 p-4">
-        <div class="bg-gray-900 border border-gray-800 p-8 rounded-2xl w-full max-w-md shadow-2xl">
-            <h1 class="brand-font text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-indigo-400 text-center mb-1">gyan</h1>
-            <p class="text-gray-400 text-xs text-center mb-6">Your Intelligent Multi-Persona AI Companion</p>
-            
-            <div class="flex border-b border-gray-800 mb-6">
-                <button onclick="switchTab('login')" id="tab-login-btn" class="flex-1 pb-2 font-bold text-teal-400 border-b-2 border-teal-400 text-sm">Login</button>
-                <button onclick="switchTab('signup')" id="tab-signup-btn" class="flex-1 pb-2 font-bold text-gray-500 text-sm">Create Account</button>
-            </div>
-
-            <!-- Login Form -->
-            <div id="login-form">
-                <input type="email" id="login-email" placeholder="Email" class="w-full p-3 bg-gray-950 border border-gray-700 rounded-xl mb-3 text-white focus:outline-none focus:border-teal-400">
-                <input type="password" id="login-password" placeholder="Password" class="w-full p-3 bg-gray-950 border border-gray-700 rounded-xl mb-4 text-white focus:outline-none focus:border-teal-400">
-                <button onclick="handleLogin()" id="login-submit-btn" class="w-full py-3 bg-teal-500 hover:bg-teal-400 text-gray-950 font-bold rounded-xl transition">Login to Gyan</button>
-            </div>
-
-            <!-- Signup Form -->
-            <div id="signup-form" style="display: none;">
-                <input type="text" id="signup-username" placeholder="Username" class="w-full p-3 bg-gray-950 border border-gray-700 rounded-xl mb-3 text-white focus:outline-none focus:border-teal-400">
-                <input type="email" id="signup-email" placeholder="Email" class="w-full p-3 bg-gray-950 border border-gray-700 rounded-xl mb-3 text-white focus:outline-none focus:border-teal-400">
-                <input type="password" id="signup-password" placeholder="Password (min 6 chars)" class="w-full p-3 bg-gray-950 border border-gray-700 rounded-xl mb-4 text-white focus:outline-none focus:border-teal-400">
-                <button onclick="handleSignup()" id="signup-submit-btn" class="w-full py-3 bg-teal-500 hover:bg-teal-400 text-gray-950 font-bold rounded-xl transition">Create Account</button>
-            </div>
-            <p id="auth-error" class="text-red-400 text-xs text-center mt-3"></p>
-        </div>
-    </div>
-
-    <!-- Sidebar with balanced spacing -->
-    <aside class="w-72 bg-gray-900 border-r border-gray-800 flex flex-col p-5 space-y-4">
-        <div>
-            <h1 class="brand-font text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-indigo-400 text-center mb-1">gyan</h1>
-            <p id="user-badge" class="text-center text-xs text-teal-400 font-semibold uppercase tracking-wider">CHATTING AS: USER</p>
-        </div>
-        
-        <!-- AI Persona -->
-        <div class="bg-gray-950 p-3 rounded-xl border border-gray-800">
-            <label class="text-[11px] text-teal-400 font-bold uppercase tracking-wider mb-1.5 block">🧠 AI Persona</label>
-            <select id="persona-select" class="w-full p-2 bg-gray-900 border border-gray-700 rounded-lg text-sm text-gray-200 focus:outline-none focus:border-teal-400">
-                <option>Exam Prep Coach</option>
-                <option>Strict Professor</option>
-                <option>Senior Tech Lead</option>
-                <option>Data Science Mentor</option>
-                <option>Creative Director</option>
-                <option>Research (Quick Mode)</option>
-                <option>Research (Deep Mode)</option>
-            </select>
+    <!-- Sidebar: Chat History -->
+    <aside class="w-72 bg-gray-900 border-r border-gray-800 flex flex-col justify-between hidden md:flex">
+        <div class="p-4 border-b border-gray-800 flex items-center justify-between">
+            <h1 class="text-xl font-bold bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">Gyan AI</h1>
+            <button onclick="createNewChat()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition">+ New Chat</button>
         </div>
 
-        <div>
-            <button onclick="createNewChat()" class="w-full py-3 bg-teal-500 hover:bg-teal-400 text-gray-950 font-bold rounded-xl transition shadow-lg shadow-teal-500/10">➕ New Chat</button>
+        <!-- Chat History List -->
+        <div id="chat-list" class="flex-1 overflow-y-auto p-3 space-y-2">
+            <!-- Dynamically populated chats -->
         </div>
 
-        <!-- Chat History List with proper separation -->
-        <div class="flex-1 overflow-y-auto space-y-2 pr-1 mt-6" id="chat-history-list">
-            <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 pt-2">Chat History</h3>
-        </div>
-
-        <!-- Footer / Logout at the bottom -->
-        <div class="pt-2 border-t border-gray-800">
-            <button onclick="handleLogout()" class="w-full py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-semibold rounded-xl transition">🚪 Logout</button>
+        <div class="p-4 border-t border-gray-800 text-xs text-gray-400 flex items-center justify-between">
+            <span>Multi-Persona Assistant</span>
+            <span class="text-green-400 font-semibold">● Online</span>
         </div>
     </aside>
 
-    <!-- Main Chat Window -->
-    <main class="flex-1 flex flex-col bg-gray-950">
-        <div id="chat-messages" class="flex-1 overflow-y-auto p-6 space-y-6">
-            <div class="h-full flex flex-col items-center justify-center text-center">
-                <h2 id="greeting-title" class="text-4xl font-extrabold text-teal-400 mb-2">Hello!</h2>
-                <p class="text-gray-400 text-sm">Ask an exam derivation, technical problem, or chat with your coach...</p>
+    <!-- Main Chat Interface -->
+    <main class="flex-1 flex flex-col h-full bg-gray-950">
+        
+        <!-- Header -->
+        <header class="bg-gray-900 border-b border-gray-800 px-6 py-3 flex items-center justify-between shadow-sm">
+            <div class="flex items-center space-x-3">
+                <span class="text-lg font-semibold" id="current-chat-title">New Conversation</span>
+            </div>
+            
+            <!-- Persona Selector -->
+            <div class="flex items-center space-x-2">
+                <label for="persona-select" class="text-xs text-gray-400 font-medium hidden sm:inline">Persona:</label>
+                <select id="persona-select" class="bg-gray-800 border border-gray-700 text-xs text-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500">
+                    <option value="General Companion">General Companion</option>
+                    <option value="Exam Prep Coach">Exam Prep Coach</option>
+                    <option value="Strict Professor">Strict Professor</option>
+                    <option value="Senior Tech Lead">Senior Tech Lead</option>
+                    <option value="Data Science Mentor">Data Science Mentor</option>
+                    <option value="Creative Director">Creative Director</option>
+                </select>
+            </div>
+        </header>
+
+        <!-- Messages Box -->
+        <div id="chat-box" class="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 max-w-4xl w-full mx-auto">
+            <!-- Default Welcome Message -->
+            <div class="flex items-start space-x-4">
+                <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm">AI</div>
+                <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 max-w-[85%] message-content">
+                    <p>Hello! I am Gyan, your multi-persona AI assistant. How can I help you today?</p>
+                </div>
             </div>
         </div>
 
-        <div class="p-4 bg-gray-900 border-t border-gray-800 flex gap-3">
-            <input type="text" id="chat-input" placeholder="Ask an exam derivation, technical problem, or chat with your coach..." class="flex-1 p-3.5 bg-gray-950 border border-gray-700 rounded-xl text-white focus:outline-none focus:border-teal-400" onkeypress="handleKeyPress(event)">
-            <button onclick="sendMessage()" class="px-6 py-3.5 bg-teal-500 hover:bg-teal-400 text-gray-950 font-bold rounded-xl transition">Send</button>
+        <!-- Input Box Area -->
+        <div class="p-4 bg-gray-900 border-t border-gray-800">
+            <form id="chat-form" class="max-w-4xl mx-auto flex items-center space-x-3">
+                <input 
+                    type="text" 
+                    id="user-input" 
+                    placeholder="Ask anything or request a structured guide..." 
+                    class="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition"
+                    autocomplete="off"
+                    required
+                >
+                <button 
+                    type="submit" 
+                    id="send-btn"
+                    class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-3 rounded-xl font-medium text-sm transition flex items-center justify-center min-w-[80px]"
+                >
+                    Send
+                </button>
+            </form>
         </div>
     </main>
 
+    <!-- Frontend Script Logic -->
     <script>
-        const SUPABASE_URL = "https://wpactrrgxmitgregzbiq.supabase.co";
-        const SUPABASE_KEY = "sb_publishable_2y_3w3ni6-I8KvRIdGUEfA_PiEqzjdp";
-        
-        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        let chats = JSON.parse(localStorage.getItem('gyan_chats')) || [];
+        let currentChatId = localStorage.getItem('gyan_current_chat') || null;
 
-        let currentUserId = localStorage.getItem('gyan_uid');
-        let currentUsername = localStorage.getItem('gyan_uname');
-        let chats = [];
-        let activeChatId = null;
+        const chatBox = document.getElementById('chat-box');
+        const chatForm = document.getElementById('chat-form');
+        const userInput = document.getElementById('user-input');
+        const chatListContainer = document.getElementById('chat-list');
+        const currentChatTitle = document.getElementById('current-chat-title');
+        const personaSelect = document.getElementById('persona-select');
 
-        window.addEventListener("DOMContentLoaded", function() {
-            if (currentUserId && currentUsername) {
-                document.getElementById('auth-modal').style.display = 'none';
-                initApp();
-            }
-        });
-
-        function switchTab(tab) {
-            document.getElementById('auth-error').innerText = '';
-            if (tab === 'login') {
-                document.getElementById('login-form').style.display = 'block';
-                document.getElementById('signup-form').style.display = 'none';
-                document.getElementById('tab-login-btn').className = "flex-1 pb-2 font-bold text-teal-400 border-b-2 border-teal-400 text-sm";
-                document.getElementById('tab-signup-btn').className = "flex-1 pb-2 font-bold text-gray-500 text-sm";
+        // Initialize App
+        function init() {
+            if (chats.length === 0) {
+                createNewChat();
             } else {
-                document.getElementById('login-form').style.display = 'none';
-                document.getElementById('signup-form').style.display = 'block';
-                document.getElementById('tab-signup-btn').className = "flex-1 pb-2 font-bold text-teal-400 border-b-2 border-teal-400 text-sm";
-                document.getElementById('tab-login-btn').className = "flex-1 pb-2 font-bold text-gray-500 text-sm";
-            }
-        }
-
-        async function handleLogin() {
-            const email = document.getElementById('login-email').value.trim();
-            const password = document.getElementById('login-password').value;
-            
-            if (!email || !password) {
-                document.getElementById('auth-error').innerText = 'Please enter email and password.';
-                return;
-            }
-
-            document.getElementById('auth-error').innerText = 'Logging in...';
-
-            const { data, error } = await supabaseClient.auth.signInWithPassword({ email: email, password: password });
-            if (error) {
-                document.getElementById('auth-error').innerText = error.message;
-            } else {
-                currentUserId = data.user.id;
-                currentUsername = data.user.user_metadata.username || email.split('@')[0];
-                localStorage.setItem('gyan_uid', currentUserId);
-                localStorage.setItem('gyan_uname', currentUsername);
-                location.reload();
-            }
-        }
-
-        async function handleSignup() {
-            const username = document.getElementById('signup-username').value.trim();
-            const email = document.getElementById('signup-email').value.trim();
-            const password = document.getElementById('signup-password').value;
-            
-            if (!username || !email || !password) {
-                document.getElementById('auth-error').innerText = 'Please fill in all fields.';
-                return;
-            }
-            document.getElementById('auth-error').innerText = 'Creating account...';
-
-            const { data, error } = await supabaseClient.auth.signUp({
-                email: email,
-                password: password,
-                options: { data: { username: username } }
-            });
-
-            if (error) {
-                document.getElementById('auth-error').innerText = error.message;
-            } else {
-                alert('Account created successfully! You can now log in.');
-                switchTab('login');
-                document.getElementById('auth-error').innerText = '';
-            }
-        }
-
-        function handleLogout() {
-            localStorage.removeItem('gyan_uid');
-            localStorage.removeItem('gyan_uname');
-            supabaseClient.auth.signOut();
-            location.reload();
-        }
-
-        async function initApp() {
-            document.getElementById('user-badge').innerText = 'CHATTING AS: ' + currentUsername.toUpperCase();
-            document.getElementById('greeting-title').innerText = 'Hello, ' + currentUsername + '!';
-            await loadChats();
-        }
-
-        async function loadChats() {
-            const { data } = await supabaseClient.from('chats').select('*').eq('user_id', currentUserId);
-            if (data && data.length > 0) {
-                chats = data;
-                activeChatId = chats[0].id;
-            } else {
-                const initialId = 'chat_' + Math.random().toString(36).substring(2, 8);
-                chats = [{ id: initialId, title: 'New Chat', messages: [] }];
-                activeChatId = initialId;
-                await saveChatsToDb();
-            }
-            renderSidebar();
-            renderChat();
-        }
-
-        async function saveChatsToDb() {
-            for (let i = 0; i < chats.length; i++) {
-                const chat = chats[i];
-                await supabaseClient.from('chats').upsert({
-                    id: chat.id,
-                    user_id: currentUserId,
-                    title: chat.title,
-                    messages: chat.messages
-                });
+                if (!currentChatId || !chats.find(c => c.id == currentChatId)) {
+                    currentChatId = chats[0].id;
+                }
+                renderChatList();
+                loadCurrentChat();
             }
         }
 
         function createNewChat() {
-            const newId = 'chat_' + Math.random().toString(36).substring(2, 8);
-            chats.unshift({ id: newId, title: 'New Chat', messages: [] });
-            activeChatId = newId;
-            saveChatsToDb();
-            renderSidebar();
-            renderChat();
+            const newChat = {
+                id: Date.now(),
+                title: 'New Conversation',
+                messages: []
+            };
+            chats.unshift(newChat);
+            currentChatId = newChat.id;
+            saveAndRefresh();
+            chatBox.innerHTML = `
+                <div class="flex items-start space-x-4">
+                    <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm">AI</div>
+                    <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 max-w-[85%] message-content">
+                        <p>Hello! I am Gyan, your multi-persona AI assistant. How can I help you today?</p>
+                    </div>
+                </div>
+            `;
         }
 
-        function renderSidebar() {
-            const list = document.getElementById('chat-history-list');
-            list.innerHTML = '<h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Chat History</h3>';
-            for (let i = 0; i < chats.length; i++) {
-                const chat = chats[i];
-                const isActive = chat.id === activeChatId;
-                const btn = document.createElement('button');
-                btn.className = 'w-full text-left p-3 rounded-xl text-sm truncate transition ' + (isActive ? 'bg-gray-800 text-teal-400 font-semibold border border-gray-700' : 'text-gray-400 hover:bg-gray-850');
-                btn.innerText = '📌 ' + chat.title;
-                btn.onclick = function() {
-                    activeChatId = chat.id;
-                    renderSidebar();
-                    renderChat();
-                };
-                list.appendChild(btn);
-            }
+        function saveAndRefresh() {
+            localStorage.setItem('gyan_chats', JSON.stringify(chats));
+            localStorage.setItem('gyan_current_chat', currentChatId);
+            renderChatList();
         }
 
-        function renderChat() {
-            const container = document.getElementById('chat-messages');
-            let activeChat = null;
-            for (let i = 0; i < chats.length; i++) {
-                if (chats[i].id === activeChatId) {
-                    activeChat = chats[i];
-                    break;
-                }
-            }
+        function renderChatList() {
+            chatListContainer.innerHTML = '';
+            chats.forEach(chat => {
+                const isActive = chat.id == currentChatId;
+                const div = document.createElement('div');
+                div.className = `group flex items-center justify-between p-2.5 rounded-xl cursor-pointer text-sm transition ${isActive ? 'bg-gray-800 text-white font-medium' : 'text-gray-400 hover:bg-gray-800/50 hover:text-gray-200'}`;
+                
+                div.innerHTML = `
+                    <span class="truncate flex-1 pr-2" onclick="switchChat(${chat.id})">${chat.title}</span>
+                    <button onclick="deleteChat(event, ${chat.id})" class="text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition p-1" title="Delete Chat">
+                        🗑️
+                    </button>
+                `;
+                chatListContainer.appendChild(div);
+            });
+        }
 
-            if (!activeChat || activeChat.messages.length === 0) {
-                container.innerHTML = '<div class="h-full flex flex-col items-center justify-center text-center"><h2 class="text-4xl font-extrabold text-teal-400 mb-2">Hello, ' + currentUsername + '!</h2><p class="text-gray-400 text-sm">Ask an exam derivation, technical problem, or chat with your coach...</p></div>';
+        function switchChat(id) {
+            currentChatId = id;
+            localStorage.setItem('gyan_current_chat', currentChatId);
+            loadCurrentChat();
+            renderChatList();
+        }
+
+        function deleteChat(event, id) {
+            event.stopPropagation();
+            chats = chats.filter(c => c.id !== id);
+            if (chats.length === 0) {
+                createNewChat();
+            } else {
+                currentChatId = chats[0].id;
+                loadCurrentChat();
+            }
+            saveAndRefresh();
+        }
+
+        function loadCurrentChat() {
+            const chat = chats.find(c => c.id == currentChatId);
+            if (!chat) return;
+            currentChatTitle.innerText = chat.title;
+            
+            chatBox.innerHTML = '';
+            if (chat.messages.length === 0) {
+                chatBox.innerHTML = `
+                    <div class="flex items-start space-x-4">
+                        <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm">AI</div>
+                        <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 max-w-[85%] message-content">
+                            <p>Hello! I am Gyan, your multi-persona AI assistant. How can I help you today?</p>
+                        </div>
+                    </div>
+                `;
                 return;
             }
 
-            container.innerHTML = '';
-            for (let i = 0; i < activeChat.messages.length; i++) {
-                const msg = activeChat.messages[i];
-                const div = document.createElement('div');
-                div.className = 'flex ' + (msg.role === 'user' ? 'justify-end' : 'justify-start');
-                div.innerHTML = '<div class="max-w-2xl p-4 rounded-2xl text-sm leading-relaxed ' + (msg.role === 'user' ? 'bg-teal-600 text-white rounded-br-none' : 'bg-gray-900 border border-gray-800 text-gray-200 rounded-bl-none') + '">' + msg.content + '</div>';
-                container.appendChild(div);
-            }
-            container.scrollTop = container.scrollHeight;
+            chat.messages.forEach(msg => {
+                appendMessageToDOM(msg.role, msg.content, false);
+            });
         }
 
-        function handleKeyPress(event) {
-            if (event.key === 'Enter') {
-                sendMessage();
+        function appendMessageToDOM(role, content, save = true) {
+            const isUser = role === 'user';
+            const messageWrapper = document.createElement('div');
+            messageWrapper.className = `flex items-start space-x-4 ${isUser ? 'flex-row-reverse space-x-reverse' : ''}`;
+
+            const avatar = document.createElement('div');
+            avatar.className = `w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${isUser ? 'bg-indigo-600' : 'bg-blue-600'}`;
+            avatar.innerText = isUser ? 'U' : 'AI';
+
+            const bubble = document.createElement('div');
+            bubble.className = `rounded-2xl p-4 max-w-[85%] message-content ${isUser ? 'bg-blue-600 text-white' : 'bg-gray-900 border border-gray-800 text-gray-100'}`;
+
+            if (isUser) {
+                bubble.innerText = content;
+            } else {
+                bubble.innerHTML = marked.parse(content);
+                renderMathInElement(bubble, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false},
+                        {left: '\\(', right: '\\)', display: false},
+                        {left: '\\[', right: '\\]', display: true}
+                    ],
+                    throwOnError: false
+                });
             }
-        }
 
-        async function sendMessage() {
-            const inputEl = document.getElementById('chat-input');
-            const text = inputEl.value.trim();
-            if (!text) return;
+            messageWrapper.appendChild(avatar);
+            messageWrapper.appendChild(bubble);
+            chatBox.appendChild(messageWrapper);
+            chatBox.scrollTop = chatBox.scrollHeight;
 
-            let activeChat = null;
-            for (let i = 0; i < chats.length; i++) {
-                if (chats[i].id === activeChatId) {
-                    activeChat = chats[i];
-                    break;
+            if (save) {
+                const chat = chats.find(c => c.id == currentChatId);
+                if (chat) {
+                    chat.messages.push({ role, content });
+                    if (chat.title === 'New Conversation' && isUser) {
+                        chat.title = content.length > 25 ? content.substring(0, 25) + '...' : content;
+                        currentChatTitle.innerText = chat.title;
+                    }
+                    saveAndRefresh();
                 }
             }
+        }
 
-            activeChat.messages.push({ role: 'user', content: text });
-            if (activeChat.title === 'New Chat') {
-                activeChat.title = text.substring(0, 25) + (text.length > 25 ? '...' : '');
-            }
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const text = userInput.value.trim();
+            if (!text) return;
 
-            inputEl.value = '';
-            renderSidebar();
-            renderChat();
+            userInput.value = '';
+            appendMessageToDOM('user', text);
 
-            const persona = document.getElementById('persona-select').value;
+            // Show typing indicator
+            const typingId = 'typing-' + Date.now();
+            const typingWrapper = document.createElement('div');
+            typingWrapper.id = typingId;
+            typingWrapper.className = 'flex items-start space-x-4';
+            typingWrapper.innerHTML = `
+                <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm">AI</div>
+                <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 text-gray-400 italic">Thinking...</div>
+            `;
+            chatBox.appendChild(typingWrapper);
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            const chat = chats.find(c => c.id == currentChatId);
+            const persona = personaSelect.value;
 
             try {
-                const res = await fetch('/.netlify/functions/chat', {
+                const response = await fetch('/.netlify/functions/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ messages: activeChat.messages, persona: persona })
+                    body: JSON.stringify({
+                        messages: chat.messages.map(m => ({ role: m.role, content: m.content })),
+                        persona: persona
+                    })
                 });
-                const data = await res.json();
-                activeChat.messages.push({ role: 'assistant', content: data.reply });
-                await saveChatsToDb();
-                renderChat();
+
+                const data = await response.json();
+                document.getElementById(typingId).remove();
+
+                if (data.reply) {
+                    appendMessageToDOM('assistant', data.reply);
+                } else {
+                    appendMessageToDOM('assistant', 'Error: No response generated.');
+                }
             } catch (err) {
-                activeChat.messages.push({ role: 'assistant', content: 'Error communicating with server.' });
-                renderChat();
+                document.getElementById(typingId).remove();
+                appendMessageToDOM('assistant', 'Server error communicating with AI endpoint.');
             }
-        }
+        });
+
+        init();
     </script>
 </body>
 </html>

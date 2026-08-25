@@ -10,7 +10,7 @@ exports.handler = async function(event, context) {
         if (!apiKey) {
             return {
                 statusCode: 500,
-                body: JSON.stringify({ reply: 'Server configuration error: OPENROUTER_API_KEY is missing in Netlify.' })
+                body: JSON.stringify({ reply: 'Server configuration error: OPENROUTER_API_KEY is missing in Netlify settings.' })
             };
         }
 
@@ -34,19 +34,24 @@ exports.handler = async function(event, context) {
                 "HTTP-Referer": "https://your-site.netlify.app",
                 "X-Title": "Gyan AI"
             },
-           body: JSON.stringify({
-                model: "google/gemma-4-31b-it:free", 
+            body: JSON.stringify({
+                model: "openrouter/free", // Uses OpenRouter's auto-router to find active free endpoints
                 messages: formattedMessages
             })
         });
 
         const data = await response.json();
-
+        
         if (data.error) {
-            return { statusCode: 400, body: JSON.stringify({ reply: 'AI Error: ' + (data.error.message || 'Unknown error') }) };
+            return { 
+                statusCode: 400, 
+                body: JSON.stringify({ reply: 'AI Error: ' + (data.error.message || JSON.stringify(data.error)) }) 
+            };
         }
 
-        const reply = data.choices && data.choices[0] ? data.choices[0].message.content : "No response generated.";
+        const reply = data.choices && data.choices[0] && data.choices[0].message 
+            ? data.choices[0].message.content 
+            : "No response generated.";
 
         return {
             statusCode: 200,

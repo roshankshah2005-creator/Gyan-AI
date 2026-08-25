@@ -26,6 +26,7 @@ exports.handler = async function(event, context) {
             ...messages
         ];
 
+        // Explicitly targets Groq's API endpoint
         const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
             headers: {
@@ -33,7 +34,7 @@ exports.handler = async function(event, context) {
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                model: "llama-3.1-8b-instant", // Active, supported Groq model
+                model: "openai/gpt-oss-20b", // Supported Groq model ID
                 messages: formattedMessages
             })
         });

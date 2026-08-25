@@ -147,6 +147,18 @@
         const currentChatTitle = document.getElementById('current-chat-title');
         const personaSelect = document.getElementById('persona-select');
 
+        // Helper function to clean erratic text and spacing from AI output
+        function cleanMessyText(rawText) {
+            if (!rawText) return '';
+            return rawText
+                .replace(/\r\n/g, '\n')
+                .replace(/[ \t]+$/gm, '')
+                .replace(/([^\n])\n(#{1,6}\s)/g, '$1\n\n$2')
+                .replace(/\n{3,}/g, '\n\n')
+                .replace(/[\u00A0\u200B]/g, ' ')
+                .trim();
+        }
+
         function init() {
             if (chats.length === 0) {
                 createNewChat();
@@ -258,7 +270,10 @@
             if (isUser) {
                 bubble.innerText = content;
             } else {
-                bubble.innerHTML = marked.parse(content);
+                // Clean erratic text/spacing before parsing Markdown and KaTeX math
+                const cleanedContent = cleanMessyText(content);
+                
+                bubble.innerHTML = marked.parse(cleanedContent);
                 renderMathInElement(bubble, {
                     delimiters: [
                         {left: '$$', right: '$$', display: true},

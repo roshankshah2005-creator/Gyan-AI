@@ -35,7 +35,7 @@ exports.handler = async function(event, context) {
                 "X-Title": "Gyan AI"
             },
            body: JSON.stringify({
-                model: "openrouter/free", 
+                model: "google/gemma-4-31b-it:free", 
                 messages: formattedMessages
             })
         });

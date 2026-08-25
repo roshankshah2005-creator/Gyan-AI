@@ -286,19 +286,26 @@ def login_user(email, password):
 
         user_id = str(response.user.id)
 
-        profile_response = (
-            supabase
-            .table("profiles")
-            .select("username")
-            .eq("id", user_id)
-            .maybe_single()
-            .execute()
-        )
+        try:
+            profile_response = (
+                supabase
+                .table("profiles")
+                .select("username")
+                .eq("id", user_id)
+                .maybe_single()
+                .execute()
+            )
+        except Exception:
+            profile_response = None
 
-        if not profile_response.data:
+        username = None
+        if profile_response and getattr(profile_response, "data", None):
+            username = profile_response.data.get("username")
+
+        if not username:
 
             username = (
-                response.user.user_metadata.get("username")
+                (response.user.user_metadata.get("username") if response.user.user_metadata else None)
                 or email.split("@")[0]
             )
 
@@ -315,10 +322,6 @@ def login_user(email, password):
             except Exception:
 
                 pass
-
-        else:
-
-            username = profile_response.data["username"]
 
         return (
             True,
@@ -458,25 +461,27 @@ def restore_login_session():
 
         user_id = str(response.user.id)
 
-        profile_response = (
-            supabase
-            .table("profiles")
-            .select("username")
-            .eq("id", user_id)
-            .maybe_single()
-            .execute()
-        )
+        try:
+            profile_response = (
+                supabase
+                .table("profiles")
+                .select("username")
+                .eq("id", user_id)
+                .maybe_single()
+                .execute()
+            )
+        except Exception:
+            profile_response = None
 
-        if not profile_response.data:
+        username = None
+        if profile_response and getattr(profile_response, "data", None):
+            username = profile_response.data.get("username")
 
+        if not username:
             username = (
-                response.user.user_metadata.get("username")
+                (response.user.user_metadata.get("username") if response.user.user_metadata else None)
                 or "User"
             )
-
-        else:
-
-            username = profile_response.data["username"]
 
         st.session_state.user_id = user_id
         st.session_state.display_name = username
@@ -837,7 +842,7 @@ def load_chats_from_db(user_id):
             .execute()
         )
 
-        if response.data:
+        if response and response.data:
 
             chats = []
 

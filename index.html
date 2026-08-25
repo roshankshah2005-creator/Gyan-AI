@@ -17,7 +17,6 @@
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
 
     <style>
-        /* Custom styling for rendered markdown elements */
         .message-content table {
             width: 100%;
             border-collapse: collapse;
@@ -61,84 +60,115 @@
 </head>
 <body class="bg-gray-950 text-gray-100 flex h-screen overflow-hidden">
 
-    <!-- Sidebar: Chat History -->
-    <aside class="w-72 bg-gray-900 border-r border-gray-800 flex flex-col justify-between hidden md:flex">
-        <div class="p-4 border-b border-gray-800 flex items-center justify-between">
-            <h1 class="text-xl font-bold bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">Gyan AI</h1>
-            <button onclick="createNewChat()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition">+ New Chat</button>
-        </div>
-
-        <!-- Chat History List -->
-        <div id="chat-list" class="flex-1 overflow-y-auto p-3 space-y-2">
-            <!-- Dynamically populated chats -->
-        </div>
-
-        <div class="p-4 border-t border-gray-800 text-xs text-gray-400 flex items-center justify-between">
-            <span>Multi-Persona Assistant</span>
-            <span class="text-green-400 font-semibold">● Online</span>
-        </div>
-    </aside>
-
-    <!-- Main Chat Interface -->
-    <main class="flex-1 flex flex-col h-full bg-gray-950">
-        
-        <!-- Header -->
-        <header class="bg-gray-900 border-b border-gray-800 px-6 py-3 flex items-center justify-between shadow-sm">
-            <div class="flex items-center space-x-3">
-                <span class="text-lg font-semibold" id="current-chat-title">New Conversation</span>
+    <!-- LOGIN / SIGNUP MODAL -->
+    <div id="auth-modal" class="fixed inset-0 z-50 bg-gray-950/90 backdrop-blur-md flex items-center justify-center p-4 hidden">
+        <div class="bg-gray-900 border border-gray-800 rounded-2xl p-8 max-w-md w-full shadow-2xl space-y-6">
+            <div class="text-center space-y-2">
+                <h2 class="text-2xl font-bold bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">Welcome to Gyan AI</h2>
+                <p class="text-sm text-gray-400">Sign in or create an account to get started</p>
             </div>
-            
-            <!-- Persona Selector -->
-            <div class="flex items-center space-x-2">
-                <label for="persona-select" class="text-xs text-gray-400 font-medium hidden sm:inline">Persona:</label>
-                <select id="persona-select" class="bg-gray-800 border border-gray-700 text-xs text-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500">
-                    <option value="General Companion">General Companion</option>
-                    <option value="Exam Prep Coach">Exam Prep Coach</option>
-                    <option value="Strict Professor">Strict Professor</option>
-                    <option value="Senior Tech Lead">Senior Tech Lead</option>
-                    <option value="Data Science Mentor">Data Science Mentor</option>
-                    <option value="Creative Director">Creative Director</option>
-                </select>
-            </div>
-        </header>
-
-        <!-- Messages Box -->
-        <div id="chat-box" class="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 max-w-4xl w-full mx-auto">
-            <!-- Default Welcome Message -->
-            <div class="flex items-start space-x-4">
-                <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm">AI</div>
-                <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 max-w-[85%] message-content">
-                    <p>Hello! I am Gyan, your multi-persona AI assistant. How can I help you today?</p>
+            <form id="auth-form" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-300 mb-1">Your Name</label>
+                    <input type="text" id="auth-name" required placeholder="Enter your full name" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm text-gray-100 focus:outline-none focus:border-blue-500">
                 </div>
-            </div>
-        </div>
-
-        <!-- Input Box Area -->
-        <div class="p-4 bg-gray-900 border-t border-gray-800">
-            <form id="chat-form" class="max-w-4xl mx-auto flex items-center space-x-3">
-                <input 
-                    type="text" 
-                    id="user-input" 
-                    placeholder="Ask anything or request a structured guide..." 
-                    class="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition"
-                    autocomplete="off"
-                    required
-                >
-                <button 
-                    type="submit" 
-                    id="send-btn"
-                    class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-3 rounded-xl font-medium text-sm transition flex items-center justify-center min-w-[80px]"
-                >
-                    Send
+                <div>
+                    <label class="block text-xs font-medium text-gray-300 mb-1">Email Address</label>
+                    <input type="email" id="auth-email" required placeholder="you@example.com" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm text-gray-100 focus:outline-none focus:border-blue-500">
+                </div>
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-3 rounded-xl transition text-sm">
+                    Continue to App
                 </button>
             </form>
         </div>
-    </main>
+    </div>
+
+    <!-- MAIN APP CONTAINER -->
+    <div id="app-container" class="flex h-screen w-full overflow-hidden hidden">
+        
+        <!-- Sidebar: Chat History -->
+        <aside class="w-72 bg-gray-900 border-r border-gray-800 flex flex-col justify-between">
+            <div class="p-4 border-b border-gray-800 flex items-center justify-between">
+                <div>
+                    <h1 class="text-lg font-bold bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">Gyan AI</h1>
+                    <p id="user-display-tag" class="text-xs text-gray-400 truncate w-36"></p>
+                </div>
+                <button onclick="createNewChat()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition">+ New</button>
+            </div>
+
+            <!-- Chat History List -->
+            <div id="chat-list" class="flex-1 overflow-y-auto p-3 space-y-2"></div>
+
+            <div class="p-4 border-t border-gray-800 flex items-center justify-between">
+                <span class="text-xs text-green-400 font-semibold">● Online</span>
+                <button onclick="logout()" class="text-xs text-gray-400 hover:text-red-400 transition">Log Out</button>
+            </div>
+        </aside>
+
+        <!-- Main Chat Interface -->
+        <main class="flex-1 flex flex-col h-full bg-gray-950">
+            
+            <!-- Header -->
+            <header class="bg-gray-900 border-b border-gray-800 px-6 py-3 flex items-center justify-between shadow-sm">
+                <span class="text-lg font-semibold" id="current-chat-title">New Conversation</span>
+                
+                <!-- Persona Selector -->
+                <div class="flex items-center space-x-2">
+                    <label for="persona-select" class="text-xs text-gray-400 font-medium hidden sm:inline">Persona:</label>
+                    <select id="persona-select" class="bg-gray-800 border border-gray-700 text-xs text-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500">
+                        <option value="General Companion">General Companion</option>
+                        <option value="Exam Prep Coach">Exam Prep Coach</option>
+                        <option value="Strict Professor">Strict Professor</option>
+                        <option value="Senior Tech Lead">Senior Tech Lead</option>
+                        <option value="Data Science Mentor">Data Science Mentor</option>
+                        <option value="Creative Director">Creative Director</option>
+                    </select>
+                </div>
+            </header>
+
+            <!-- Messages Box -->
+            <div id="chat-box" class="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 max-w-4xl w-full mx-auto">
+                <div class="flex items-start space-x-4">
+                    <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm">AI</div>
+                    <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 max-w-[85%] message-content">
+                        <p>Hello! I am Gyan, your multi-persona AI assistant. How can I help you today?</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input Box Area -->
+            <div class="p-4 bg-gray-900 border-t border-gray-800">
+                <form id="chat-form" class="max-w-4xl mx-auto flex items-center space-x-3">
+                    <input 
+                        type="text" 
+                        id="user-input" 
+                        placeholder="Ask anything or request a structured guide..." 
+                        class="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition"
+                        autocomplete="off"
+                        required
+                    >
+                    <button 
+                        type="submit" 
+                        id="send-btn"
+                        class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-3 rounded-xl font-medium text-sm transition flex items-center justify-center min-w-[80px]"
+                    >
+                        Send
+                    </button>
+                </form>
+            </div>
+        </main>
+    </div>
 
     <!-- Frontend Script Logic -->
     <script>
+        let currentUser = JSON.parse(localStorage.getItem('gyan_user')) || null;
         let chats = JSON.parse(localStorage.getItem('gyan_chats')) || [];
         let currentChatId = localStorage.getItem('gyan_current_chat') || null;
+
+        const authModal = document.getElementById('auth-modal');
+        const authForm = document.getElementById('auth-form');
+        const appContainer = document.getElementById('app-container');
+        const userDisplayTag = document.getElementById('user-display-tag');
 
         const chatBox = document.getElementById('chat-box');
         const chatForm = document.getElementById('chat-form');
@@ -147,7 +177,35 @@
         const currentChatTitle = document.getElementById('current-chat-title');
         const personaSelect = document.getElementById('persona-select');
 
-        // Helper function to clean erratic text and spacing from AI output
+        function checkAuth() {
+            if (!currentUser) {
+                authModal.classList.remove('hidden');
+                appContainer.classList.add('hidden');
+            } else {
+                authModal.classList.add('hidden');
+                appContainer.classList.remove('hidden');
+                userDisplayTag.innerText = currentUser.name;
+                initApp();
+            }
+        }
+
+        authForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const name = document.getElementById('auth-name').value.trim();
+            const email = document.getElementById('auth-email').value.trim();
+            if (!name || !email) return;
+
+            currentUser = { name, email };
+            localStorage.setItem('gyan_user', JSON.stringify(currentUser));
+            checkAuth();
+        });
+
+        function logout() {
+            localStorage.removeItem('gyan_user');
+            currentUser = null;
+            checkAuth();
+        }
+
         function cleanMessyText(rawText) {
             if (!rawText) return '';
             return rawText
@@ -159,7 +217,7 @@
                 .trim();
         }
 
-        function init() {
+        function initApp() {
             if (chats.length === 0) {
                 createNewChat();
             } else {
@@ -184,7 +242,7 @@
                 <div class="flex items-start space-x-4">
                     <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm">AI</div>
                     <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 max-w-[85%] message-content">
-                        <p>Hello! I am Gyan, your multi-persona AI assistant. How can I help you today?</p>
+                        <p>Hello ${currentUser.name}! I am Gyan, your multi-persona AI assistant. How can I help you today?</p>
                     </div>
                 </div>
             `;
@@ -243,7 +301,7 @@
                     <div class="flex items-start space-x-4">
                         <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm">AI</div>
                         <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 max-w-[85%] message-content">
-                            <p>Hello! I am Gyan, your multi-persona AI assistant. How can I help you today?</p>
+                            <p>Hello ${currentUser.name}! I am Gyan, your multi-persona AI assistant. How can I help you today?</p>
                         </div>
                     </div>
                 `;
@@ -270,9 +328,7 @@
             if (isUser) {
                 bubble.innerText = content;
             } else {
-                // Clean erratic text/spacing before parsing Markdown and KaTeX math
                 const cleanedContent = cleanMessyText(content);
-                
                 bubble.innerHTML = marked.parse(cleanedContent);
                 renderMathInElement(bubble, {
                     delimiters: [
@@ -335,21 +391,30 @@
                     })
                 });
 
-                const data = await response.json();
-                document.getElementById(typingId).remove();
+                const responseText = await response.text();
+                let data;
+                try {
+                    data = JSON.parse(responseText);
+                } catch (jsonErr) {
+                    throw new Error("Server returned non-JSON response: " + responseText.substring(0, 80));
+                }
 
-                if (data.reply) {
+                document.getElementById(typingId)?.remove();
+
+                if (!response.ok || data.error) {
+                    appendMessageToDOM('assistant', 'AI Error: ' + (data.reply || data.error || 'Unknown error'));
+                } else if (data.reply) {
                     appendMessageToDOM('assistant', data.reply);
                 } else {
                     appendMessageToDOM('assistant', 'Error: No response generated.');
                 }
             } catch (err) {
-                document.getElementById(typingId).remove();
-                appendMessageToDOM('assistant', 'Server error communicating with AI endpoint.');
+                document.getElementById(typingId)?.remove();
+                appendMessageToDOM('assistant', 'Connection error: ' + err.message);
             }
         });
 
-        init();
+        checkAuth();
     </script>
 </body>
 </html>

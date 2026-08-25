@@ -35,7 +35,7 @@ exports.handler = async function(event, context) {
                 "X-Title": "Gyan AI"
             },
             body: JSON.stringify({
-                model: "openrouter/free", // Uses OpenRouter's auto-router to find active free endpoints
+                model: "nvidia/nemotron-3-ultra-550b-a55b:free", 
                 messages: formattedMessages
             })
         });

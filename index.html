@@ -117,7 +117,7 @@
         }
 
         async function handleLogin() {
-            const email = document.getElementById('login-email').value.trim();
+            const email = document.getElementById('login-email').value.trim().toLowerCase();
             const password = document.getElementById('login-password').value;
             
             if (!email || !password) {
@@ -127,12 +127,18 @@
 
             document.getElementById('auth-error').innerText = 'Logging in...';
 
-            const { data, error } = await supabaseClient.auth.signInWithPassword({ email: email, password: password });
-            if (error) {
-                document.getElementById('auth-error').innerText = error.message;
+            const { data, error } = await supabaseClient
+                .from('users')
+                .select('*')
+                .eq('email', email)
+                .eq('password', password)
+                .maybeSingle();
+
+            if (error || !data) {
+                document.getElementById('auth-error').innerText = 'Invalid email or password.';
             } else {
-                currentUserId = data.user.id;
-                currentUsername = data.user.user_metadata.username || email.split('@')[0];
+                currentUserId = data.id;
+                currentUsername = data.username;
                 localStorage.setItem('gyan_uid', currentUserId);
                 localStorage.setItem('gyan_uname', currentUsername);
                 location.reload();
@@ -141,23 +147,31 @@
 
         async function handleSignup() {
             const username = document.getElementById('signup-username').value.trim();
-            const email = document.getElementById('signup-email').value.trim();
+            const email = document.getElementById('signup-email').value.trim().toLowerCase();
             const password = document.getElementById('signup-password').value;
             
             if (!username || !email || !password) {
                 document.getElementById('auth-error').innerText = 'Please fill in all fields.';
                 return;
             }
+            if (password.length < 6) {
+                document.getElementById('auth-error').innerText = 'Password must be at least 6 characters.';
+                return;
+            }
+
             document.getElementById('auth-error').innerText = 'Creating account...';
 
-            const { data, error } = await supabaseClient.auth.signUp({
-                email: email,
-                password: password,
-                options: { data: { username: username } }
-            });
+            const userId = 'user_' + Math.random().toString(36).substring(2, 10);
+            const { error } = await supabaseClient
+                .from('users')
+                .insert([{ id: userId, username: username, email: email, password: password }]);
 
             if (error) {
-                document.getElementById('auth-error').innerText = error.message;
+                if (error.message.includes('duplicate') || error.code === '23505') {
+                    document.getElementById('auth-error').innerText = 'This email is already registered.';
+                } else {
+                    document.getElementById('auth-error').innerText = error.message;
+                }
             } else {
                 alert('Account created successfully! You can now log in.');
                 switchTab('login');
@@ -168,7 +182,6 @@
         function handleLogout() {
             localStorage.removeItem('gyan_uid');
             localStorage.removeItem('gyan_uname');
-            supabaseClient.auth.signOut();
             location.reload();
         }
 

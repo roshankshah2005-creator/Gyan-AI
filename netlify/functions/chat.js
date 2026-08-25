@@ -4,7 +4,9 @@ exports.handler = async function(event, context) {
     }
 
     try {
-        const { messages, persona } = JSON.parse(event.body || '{}');
+        const body = JSON.parse(event.body || '{}');
+        const messages = body.messages || [];
+        const persona = body.persona || 'General Companion';
         const apiKey = process.env.GROQ_API_KEY;
 
         if (!apiKey) {
@@ -33,19 +35,20 @@ exports.handler = async function(event, context) {
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                model: "llama-3.3-70b-versatile", // Correct Groq native model
+                model: "llama-3.1-8b-instant", // Most reliable and fast free tier model on Groq
                 messages: formattedMessages,
                 temperature: 0.6,
-                max_tokens: 2048
+                max_tokens: 1024
             })
         });
 
         const data = await response.json();
         
-        if (data.error) {
+        if (!response.ok || data.error) {
+            console.error("Groq API Error:", data);
             return { 
                 statusCode: 400, 
-                body: JSON.stringify({ reply: 'AI Error: ' + (data.error.message || JSON.stringify(data.error)) }) 
+                body: JSON.stringify({ reply: 'AI Error: ' + (data.error?.message || JSON.stringify(data)) }) 
             };
         }
 
@@ -60,6 +63,7 @@ exports.handler = async function(event, context) {
         };
 
     } catch (error) {
+        console.error("Server exception:", error);
         return {
             statusCode: 500,
             body: JSON.stringify({ reply: 'Server error: ' + error.message })

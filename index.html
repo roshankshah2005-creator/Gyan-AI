@@ -42,21 +42,17 @@
         </div>
     </div>
 
-    <!-- Sidebar -->
-    <aside class="w-72 bg-gray-900 border-r border-gray-800 flex flex-col p-4">
-        <h1 class="brand-font text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-indigo-400 text-center mb-1">gyan</h1>
-        <p id="user-badge" class="text-center text-xs text-teal-400 font-semibold mb-4 uppercase">CHATTING AS: USER</p>
-        
-        <button onclick="handleLogout()" class="w-full py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-semibold rounded-lg mb-4 transition">🚪 Logout</button>
-        <button onclick="createNewChat()" class="w-full py-3 bg-teal-500 hover:bg-teal-400 text-gray-950 font-bold rounded-xl transition">➕ New Chat</button>
-
-        <div class="flex-1 overflow-y-auto space-y-2 mb-4" id="chat-history-list">
-            <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Chat History</h3>
+    <!-- Sidebar with improved spacing and repositioned AI Persona -->
+    <aside class="w-72 bg-gray-900 border-r border-gray-800 flex flex-col p-5 space-y-4">
+        <div>
+            <h1 class="brand-font text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-indigo-400 text-center mb-1">gyan</h1>
+            <p id="user-badge" class="text-center text-xs text-teal-400 font-semibold uppercase tracking-wider">CHATTING AS: USER</p>
         </div>
-
-        <div class="pt-4 border-t border-gray-800">
-            <label class="text-xs text-gray-400 font-semibold mb-1 block">AI PERSONA</label>
-            <select id="persona-select" class="w-full p-2.5 bg-gray-950 border border-gray-700 rounded-xl text-sm text-teal-400 focus:outline-none">
+        
+        <!-- AI Persona moved higher up -->
+        <div class="bg-gray-950 p-3 rounded-xl border border-gray-800">
+            <label class="text-[11px] text-teal-400 font-bold uppercase tracking-wider mb-1.5 block">🧠 AI Persona</label>
+            <select id="persona-select" class="w-full p-2 bg-gray-900 border border-gray-700 rounded-lg text-sm text-gray-200 focus:outline-none focus:border-teal-400">
                 <option>Exam Prep Coach</option>
                 <option>Strict Professor</option>
                 <option>Senior Tech Lead</option>
@@ -65,6 +61,20 @@
                 <option>Research (Quick Mode)</option>
                 <option>Research (Deep Mode)</option>
             </select>
+        </div>
+
+        <div class="space-y-2">
+            <button onclick="createNewChat()" class="w-full py-3 bg-teal-500 hover:bg-teal-400 text-gray-950 font-bold rounded-xl transition shadow-lg shadow-teal-500/10">➕ New Chat</button>
+        </div>
+
+        <!-- Chat History List with better scrolling & padding -->
+        <div class="flex-1 overflow-y-auto space-y-2 pr-1" id="chat-history-list">
+            <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 pt-2">Chat History</h3>
+        </div>
+
+        <!-- Footer / Logout at the bottom -->
+        <div class="pt-2 border-t border-gray-800">
+            <button onclick="handleLogout()" class="w-full py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-semibold rounded-xl transition">🚪 Logout</button>
         </div>
     </aside>
 

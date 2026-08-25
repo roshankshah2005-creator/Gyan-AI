@@ -4,6 +4,8 @@ import re
 import streamlit as st
 from groq import Groq
 from supabase import create_client, Client
+from streamlit_cookies_controller import CookieController
+import json
 
 # -------------------------------------------------------------------------
 # 1. PAGE CONFIGURATION
@@ -95,6 +97,7 @@ if not supabase_url or not supabase_key:
 try:
     client = Groq(api_key=groq_api_key)
     supabase: Client = create_client(supabase_url, supabase_key)
+    cookie_controller = CookieController()
 except Exception as e:
     st.error(f"Failed to initialize clients: {e}")
     st.stop()
@@ -112,20 +115,170 @@ def get_user_ip():
 
 
 # -------------------------------------------------------------------------
-# 5. SESSION STATE & EARLY URL RECOVERY (FIXES REFRESH WIPE)
+# 5. AUTHENTICATION SESSION STATE
 # -------------------------------------------------------------------------
 if "user_id" not in st.session_state:
     st.session_state.user_id = None
+
 if "display_name" not in st.session_state:
     st.session_state.display_name = None
 
-# Grab parameters instantly from URL query string on startup/refresh
-qp_user_id = st.query_params.get("user_id")
-qp_name = st.query_params.get("name")
+if "chats" not in st.session_state:
+    st.session_state.chats = None
 
-if qp_user_id and qp_name:
-    st.session_state.user_id = qp_user_id
-    st.session_state.display_name = qp_name
+if "active_chat_id" not in st.session_state:
+    st.session_state.active_chat_id = None
+
+
+# -------------------------------------------------------------------------
+# 5A. AUTHENTICATION HELPERS
+# -------------------------------------------------------------------------
+def signup_user(email, username, password):
+    try:
+        response = supabase.auth.sign_up({
+            "email": email,
+            "password": password
+        })
+
+        if not response.user:
+            return False, "Could not create account."
+
+        user_id = response.user.id
+
+        supabase.table("profiles").insert({
+            "id": user_id,
+            "username": username
+        }).execute()
+
+        return True, "Account created successfully."
+
+    except Exception as e:
+        return False, str(e)
+
+
+def login_user(email, password):
+    try:
+        response = supabase.auth.sign_in_with_password({
+            "email": email,
+            "password": password
+        })
+
+        if not response.user:
+            return False, None, None, "Invalid email or password."
+
+        user_id = response.user.id
+
+        profile = (
+            supabase.table("profiles")
+            .select("username")
+            .eq("id", user_id)
+            .single()
+            .execute()
+        )
+
+        if not profile.data:
+            return False, None, None, "User profile was not found."
+
+        return True, user_id, profile.data["username"], None
+
+    except Exception as e:
+        return False, None, None, str(e)
+
+
+def save_login_session():
+    try:
+        session_response = supabase.auth.get_session()
+
+        if session_response and session_response.session:
+            session = session_response.session
+
+            cookie_controller.set(
+                "gyan_session",
+                json.dumps({
+                    "access_token": session.access_token,
+                    "refresh_token": session.refresh_token
+                }),
+                max_age=60 * 60 * 24 * 30
+            )
+            return True
+
+    except Exception as e:
+        print(f"Could not save login session: {e}")
+
+    return False
+
+
+def restore_login_session():
+    try:
+        saved_session = cookie_controller.get("gyan_session")
+
+        if not saved_session:
+            return False
+
+        if isinstance(saved_session, str):
+            session_data = json.loads(saved_session)
+        else:
+            session_data = saved_session
+
+        access_token = session_data.get("access_token")
+        refresh_token = session_data.get("refresh_token")
+
+        if not access_token or not refresh_token:
+            return False
+
+        response = supabase.auth.set_session(
+            access_token,
+            refresh_token
+        )
+
+        if not response.user:
+            return False
+
+        user_id = response.user.id
+
+        profile = (
+            supabase.table("profiles")
+            .select("username")
+            .eq("id", user_id)
+            .single()
+            .execute()
+        )
+
+        if not profile.data:
+            return False
+
+        st.session_state.user_id = user_id
+        st.session_state.display_name = profile.data["username"]
+
+        return True
+
+    except Exception as e:
+        print(f"Session restore failed: {e}")
+        return False
+
+
+def logout_user():
+    try:
+        supabase.auth.sign_out()
+    except Exception:
+        pass
+
+    try:
+        cookie_controller.remove("gyan_session")
+    except Exception:
+        pass
+
+    st.session_state.user_id = None
+    st.session_state.display_name = None
+    st.session_state.chats = None
+    st.session_state.active_chat_id = None
+
+    st.rerun()
+
+
+# Restore an existing login before showing the login screen.
+if st.session_state.user_id is None:
+    restore_login_session()
 
 
 # -------------------------------------------------------------------------
@@ -164,41 +317,148 @@ def save_chats_to_db(user_id, chats_data):
                 "user_id": user_id,
                 "title": chat["title"],
                 "messages": chat["messages"],
-                "ip_address": user_ip
+                "ip_address": user_ip,
+                "updated_at": "now()"
             }).execute()
     except Exception as e:
         print(f"Error saving chats: {e}")
 
 def delete_chat_from_db(chat_id):
     try:
-        supabase.table("chats").delete().eq("id", chat_id).execute()
+        supabase.table("chats").delete().eq("id", chat_id).eq("user_id", st.session_state.user_id).execute()
     except Exception as e:
         print(f"Error deleting chat: {e}")
 
 
 # -------------------------------------------------------------------------
-# 7. "WHAT SHOULD I CALL YOU?" WELCOME SCREEN
+# 7. LOGIN / SIGNUP SCREEN
 # -------------------------------------------------------------------------
-if not st.session_state.display_name:
-    st.markdown("<div class='brand-title' style='margin-top: 50px;'>gyan</div>", unsafe_allow_html=True)
-    st.markdown("<h2 style='text-align: center; color: #00cec9; margin-top: 30px;'>Welcome! What should I call you?</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #a0aec0; margin-bottom: 30px;'>Please enter your preferred name or nickname to begin chatting.</p>", unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns([1, 1.5, 1])
-    with col2:
-        preferred_name = st.text_input("Your Name / Nickname", key="name_input")
-        if st.button("Continue to Gyan", use_container_width=True):
-            clean_name = preferred_name.strip()
-            if clean_name:
-                st.session_state.display_name = clean_name.capitalize()
-                st.session_state.user_id = uuid.uuid4().hex[:8]
-                
-                # Save identity in URL query params
-                st.query_params["user_id"] = st.session_state.user_id
-                st.query_params["name"] = st.session_state.display_name
-                st.rerun()
-            else:
-                st.warning("Please enter a valid name.")
+if not st.session_state.user_id:
+
+    st.markdown(
+        "<div class='brand-title' style='margin-top:50px;'>gyan</div>",
+        unsafe_allow_html=True
+    )
+
+    st.markdown(
+        """
+        <p style='text-align:center; color:#a0aec0; margin-bottom:30px;'>
+            Your Intelligent Multi-Persona AI Companion
+        </p>
+        """,
+        unsafe_allow_html=True
+    )
+
+    tab_login, tab_signup = st.tabs(["🔐 Login", "📝 Create Account"])
+
+    with tab_login:
+        col1, col2, col3 = st.columns([1, 1.5, 1])
+
+        with col2:
+            st.markdown("### Welcome Back")
+
+            login_email = st.text_input(
+                "Email",
+                key="login_email"
+            )
+
+            login_password = st.text_input(
+                "Password",
+                type="password",
+                key="login_password"
+            )
+
+            if st.button(
+                "Login to Gyan",
+                use_container_width=True,
+                type="primary"
+            ):
+                if not login_email.strip():
+                    st.warning("Please enter your email.")
+
+                elif not login_password:
+                    st.warning("Please enter your password.")
+
+                else:
+                    success, user_id, username, error = login_user(
+                        login_email.strip(),
+                        login_password
+                    )
+
+                    if success:
+                        st.session_state.user_id = user_id
+                        st.session_state.display_name = username
+                        save_login_session()
+
+                        st.success(f"Welcome back, {username}!")
+                        st.rerun()
+                    else:
+                        st.error(error or "Login failed.")
+
+    with tab_signup:
+        col1, col2, col3 = st.columns([1, 1.5, 1])
+
+        with col2:
+            st.markdown("### Create Your Gyan Account")
+
+            signup_username = st.text_input(
+                "Username",
+                key="signup_username"
+            )
+
+            signup_email = st.text_input(
+                "Email",
+                key="signup_email"
+            )
+
+            signup_password = st.text_input(
+                "Password",
+                type="password",
+                key="signup_password"
+            )
+
+            signup_confirm_password = st.text_input(
+                "Confirm Password",
+                type="password",
+                key="signup_confirm_password"
+            )
+
+            if st.button(
+                "Create Account",
+                use_container_width=True,
+                type="primary"
+            ):
+                username = signup_username.strip()
+                email = signup_email.strip()
+
+                if not username:
+                    st.warning("Please enter a username.")
+
+                elif len(username) < 3:
+                    st.warning("Username must contain at least 3 characters.")
+
+                elif not email:
+                    st.warning("Please enter your email.")
+
+                elif len(signup_password) < 6:
+                    st.warning("Password must contain at least 6 characters.")
+
+                elif signup_password != signup_confirm_password:
+                    st.error("Passwords do not match.")
+
+                else:
+                    success, message = signup_user(
+                        email,
+                        username,
+                        signup_password
+                    )
+
+                    if success:
+                        st.success("Account created successfully!")
+                        st.info("You can now log in with your email and password.")
+                    else:
+                        st.error(message)
+
     st.stop()
 
 
@@ -221,10 +481,12 @@ def clean_math_syntax(text):
 # -------------------------------------------------------------------------
 # 9. SESSION STATE INITIALIZATION FOR CHATS
 # -------------------------------------------------------------------------
-if "chats" not in st.session_state:
-    st.session_state.chats = load_chats_from_db(st.session_state.user_id)
+if st.session_state.chats is None:
+    st.session_state.chats = load_chats_from_db(
+        st.session_state.user_id
+    )
 
-if "active_chat_id" not in st.session_state:
+if st.session_state.active_chat_id is None:
     st.session_state.active_chat_id = st.session_state.chats[0]["id"]
 
 def get_active_chat():
@@ -256,15 +518,8 @@ with st.sidebar:
         unsafe_allow_html=True
     )
 
-    if st.button("🔄 Switch Name", use_container_width=True):
-        st.session_state.display_name = None
-        st.session_state.user_id = None
-        st.query_params.clear()
-        if "chats" in st.session_state:
-            del st.session_state.chats
-        if "active_chat_id" in st.session_state:
-            del st.session_state.active_chat_id
-        st.rerun()
+    if st.button("🚪 Logout", use_container_width=True):
+        logout_user()
 
     st.markdown("---")
     st.markdown("### 💬 CHAT HISTORY")

@@ -1,72 +1,414 @@
-exports.handler = async function(event, context) {
-    if (event.httpMethod !== 'POST') {
-        return { statusCode: 405, body: JSON.stringify({ error: 'Method Not Allowed' }) };
-    }
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gyan AI - Intelligent Companion</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Marked.js for Markdown Parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.js"></script>
 
-    try {
-        const body = JSON.parse(event.body || '{}');
-        const messages = body.messages || [];
-        const persona = body.persona || 'General Companion';
-        const apiKey = process.env.GROQ_API_KEY;
+    <!-- KaTeX for LaTeX Math Rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
 
-        if (!apiKey) {
-            return {
-                statusCode: 500,
-                body: JSON.stringify({ reply: 'Server configuration error: GROQ_API_KEY is missing in Netlify settings.' })
-            };
+    <style>
+        .message-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+            font-size: 0.95rem;
+        }
+        .message-content th, .message-content td {
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 8px 12px;
+            text-align: left;
+        }
+        .message-content th {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .message-content ul, .message-content ol {
+            padding-left: 20px;
+            margin: 8px 0;
+            list-style-type: disc;
+        }
+        .message-content ol {
+            list-style-type: decimal;
+        }
+        .message-content p {
+            margin-bottom: 8px;
+            line-height: 1.6;
+        }
+        .message-content pre {
+            background: #1e1e1e;
+            padding: 12px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        .message-content code {
+            font-family: monospace;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 2px 4px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-100 flex h-screen overflow-hidden">
+
+    <!-- LOGIN / SIGNUP MODAL (Hidden if already logged in) -->
+    <div id="auth-modal" class="fixed inset-0 z-50 bg-gray-950/90 backdrop-blur-md flex items-center justify-center p-4 hidden">
+        <div class="bg-gray-900 border border-gray-800 rounded-2xl p-8 max-w-md w-full shadow-2xl space-y-6">
+            <div class="text-center space-y-2">
+                <h2 class="text-2xl font-bold bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">Welcome to Gyan AI</h2>
+                <p class="text-sm text-gray-400">Sign in or create an account to get started</p>
+            </div>
+            <form id="auth-form" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-300 mb-1">Your Name</label>
+                    <input type="text" id="auth-name" required placeholder="Enter your full name" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm text-gray-100 focus:outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-300 mb-1">Email Address</label>
+                    <input type="email" id="auth-email" required placeholder="you@example.com" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm text-gray-100 focus:outline-none focus:border-blue-500">
+                </div>
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-3 rounded-xl transition text-sm">
+                    Continue to App
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- MAIN APP CONTAINER -->
+    <div id="app-container" class="flex h-screen w-full overflow-hidden hidden">
+        
+        <!-- Sidebar: Chat History -->
+        <aside class="w-72 bg-gray-900 border-r border-gray-800 flex flex-col justify-between">
+            <div class="p-4 border-b border-gray-800 flex items-center justify-between">
+                <div>
+                    <h1 class="text-lg font-bold bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">Gyan AI</h1>
+                    <p id="user-display-tag" class="text-xs text-gray-400 truncate w-36"></p>
+                </div>
+                <button onclick="createNewChat()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition">+ New</button>
+            </div>
+
+            <!-- Chat History List -->
+            <div id="chat-list" class="flex-1 overflow-y-auto p-3 space-y-2">
+                <!-- Dynamically populated chats -->
+            </div>
+
+            <div class="p-4 border-t border-gray-800 flex items-center justify-between">
+                <span class="text-xs text-green-400 font-semibold">● Online</span>
+                <button onclick="logout()" class="text-xs text-gray-400 hover:text-red-400 transition">Log Out</button>
+            </div>
+        </aside>
+
+        <!-- Main Chat Interface -->
+        <main class="flex-1 flex flex-col h-full bg-gray-950">
+            
+            <!-- Header -->
+            <header class="bg-gray-900 border-b border-gray-800 px-6 py-3 flex items-center justify-between shadow-sm">
+                <span class="text-lg font-semibold" id="current-chat-title">New Conversation</span>
+                
+                <!-- Persona Selector -->
+                <div class="flex items-center space-x-2">
+                    <label for="persona-select" class="text-xs text-gray-400 font-medium hidden sm:inline">Persona:</label>
+                    <select id="persona-select" class="bg-gray-800 border border-gray-700 text-xs text-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500">
+                        <option value="General Companion">General Companion</option>
+                        <option value="Exam Prep Coach">Exam Prep Coach</option>
+                        <option value="Strict Professor">Strict Professor</option>
+                        <option value="Senior Tech Lead">Senior Tech Lead</option>
+                        <option value="Data Science Mentor">Data Science Mentor</option>
+                        <option value="Creative Director">Creative Director</option>
+                    </select>
+                </div>
+            </header>
+
+            <!-- Messages Box -->
+            <div id="chat-box" class="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 max-w-4xl w-full mx-auto">
+                <div class="flex items-start space-x-4">
+                    <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm">AI</div>
+                    <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 max-w-[85%] message-content">
+                        <p>Hello! I am Gyan, your multi-persona AI assistant. How can I help you today?</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input Box Area -->
+            <div class="p-4 bg-gray-900 border-t border-gray-800">
+                <form id="chat-form" class="max-w-4xl mx-auto flex items-center space-x-3">
+                    <input 
+                        type="text" 
+                        id="user-input" 
+                        placeholder="Ask anything or request a structured guide..." 
+                        class="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition"
+                        autocomplete="off"
+                        required
+                    >
+                    <button 
+                        type="submit" 
+                        id="send-btn"
+                        class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-3 rounded-xl font-medium text-sm transition flex items-center justify-center min-w-[80px]"
+                    >
+                        Send
+                    </button>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <!-- Frontend Script Logic -->
+    <script>
+        let currentUser = JSON.parse(localStorage.getItem('gyan_user')) || null;
+        let chats = JSON.parse(localStorage.getItem('gyan_chats')) || [];
+        let currentChatId = localStorage.getItem('gyan_current_chat') || null;
+
+        const authModal = document.getElementById('auth-modal');
+        const authForm = document.getElementById('auth-form');
+        const appContainer = document.getElementById('app-container');
+        const userDisplayTag = document.getElementById('user-display-tag');
+
+        const chatBox = document.getElementById('chat-box');
+        const chatForm = document.getElementById('chat-form');
+        const userInput = document.getElementById('user-input');
+        const chatListContainer = document.getElementById('chat-list');
+        const currentChatTitle = document.getElementById('current-chat-title');
+        const personaSelect = document.getElementById('persona-select');
+
+        function checkAuth() {
+            if (!currentUser) {
+                authModal.classList.remove('hidden');
+                appContainer.classList.add('hidden');
+            } else {
+                authModal.classList.add('hidden');
+                appContainer.classList.remove('hidden');
+                userDisplayTag.innerText = currentUser.name;
+                initApp();
+            }
         }
 
-        let systemPrompt = "You are Gyan, an intelligent multi-persona AI companion.";
-        if (persona === 'Exam Prep Coach') systemPrompt = "You are an expert Exam Prep Coach, helping students break down derivations, concepts, and study schedules clearly.";
-        else if (persona === 'Strict Professor') systemPrompt = "You are a strict, academic professor who demands rigorous precision and high standards.";
-        else if (persona === 'Senior Tech Lead') systemPrompt = "You are a pragmatic Senior Tech Lead providing clean code architecture and debugging guidance.";
-        else if (persona === 'Data Science Mentor') systemPrompt = "You are a Data Science Mentor explaining machine learning algorithms, Python, and data pipelines.";
-        else if (persona === 'Creative Director') systemPrompt = "You are a Creative Director focusing on design principles, typography, and visual aesthetics.";
+        authForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const name = document.getElementById('auth-name').value.trim();
+            const email = document.getElementById('auth-email').value.trim();
+            if (!name || !email) return;
 
-        const formattedMessages = [
-            { role: "system", content: systemPrompt },
-            ...messages
-        ];
-
-        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${apiKey}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                model: "llama-3.1-8b-instant", // Most reliable and fast free tier model on Groq
-                messages: formattedMessages,
-                temperature: 0.6,
-                max_tokens: 1024
-            })
+            currentUser = { name, email };
+            localStorage.setItem('gyan_user', JSON.stringify(currentUser));
+            checkAuth();
         });
 
-        const data = await response.json();
-        
-        if (!response.ok || data.error) {
-            console.error("Groq API Error:", data);
-            return { 
-                statusCode: 400, 
-                body: JSON.stringify({ reply: 'AI Error: ' + (data.error?.message || JSON.stringify(data)) }) 
-            };
+        function logout() {
+            localStorage.removeItem('gyan_user');
+            currentUser = null;
+            checkAuth();
         }
 
-        const reply = data.choices && data.choices[0] && data.choices[0].message 
-            ? data.choices[0].message.content 
-            : "No response generated.";
+        function cleanMessyText(rawText) {
+            if (!rawText) return '';
+            return rawText
+                .replace(/\r\n/g, '\n')
+                .replace(/[ \t]+$/gm, '')
+                .replace(/([^\n])\n(#{1,6}\s)/g, '$1\n\n$2')
+                .replace(/\n{3,}/g, '\n\n')
+                .replace(/[\u00A0\u200B]/g, ' ')
+                .trim();
+        }
 
-        return {
-            statusCode: 200,
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ reply: reply })
-        };
+        function initApp() {
+            if (chats.length === 0) {
+                createNewChat();
+            } else {
+                if (!currentChatId || !chats.find(c => c.id == currentChatId)) {
+                    currentChatId = chats[0].id;
+                }
+                renderChatList();
+                loadCurrentChat();
+            }
+        }
 
-    } catch (error) {
-        console.error("Server exception:", error);
-        return {
-            statusCode: 500,
-            body: JSON.stringify({ reply: 'Server error: ' + error.message })
-        };
-    }
-};
+        function createNewChat() {
+            const newChat = {
+                id: Date.now(),
+                title: 'New Conversation',
+                messages: []
+            };
+            chats.unshift(newChat);
+            currentChatId = newChat.id;
+            saveAndRefresh();
+            chatBox.innerHTML = `
+                <div class="flex items-start space-x-4">
+                    <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm">AI</div>
+                    <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 max-w-[85%] message-content">
+                        <p>Hello ${currentUser.name}! I am Gyan, your multi-persona AI assistant. How can I help you today?</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        function saveAndRefresh() {
+            localStorage.setItem('gyan_chats', JSON.stringify(chats));
+            localStorage.setItem('gyan_current_chat', currentChatId);
+            renderChatList();
+        }
+
+        function renderChatList() {
+            chatListContainer.innerHTML = '';
+            chats.forEach(chat => {
+                const isActive = chat.id == currentChatId;
+                const div = document.createElement('div');
+                div.className = `flex items-center justify-between p-2.5 rounded-xl text-sm transition ${isActive ? 'bg-gray-800 text-white font-medium' : 'text-gray-400 hover:bg-gray-800/50 hover:text-gray-200'}`;
+                
+                div.innerHTML = `
+                    <span class="truncate flex-1 pr-2 cursor-pointer" onclick="switchChat(${chat.id})">${chat.title}</span>
+                    <button onclick="deleteChat(event, ${chat.id})" class="text-gray-500 hover:text-red-400 p-1 rounded transition text-xs" title="Delete Chat">
+                        ❌
+                    </button>
+                `;
+                chatListContainer.appendChild(div);
+            });
+        }
+
+        function switchChat(id) {
+            currentChatId = id;
+            localStorage.setItem('gyan_current_chat', currentChatId);
+            loadCurrentChat();
+            renderChatList();
+        }
+
+        function deleteChat(event, id) {
+            event.stopPropagation();
+            chats = chats.filter(c => c.id !== id);
+            if (chats.length === 0) {
+                createNewChat();
+            } else {
+                currentChatId = chats[0].id;
+                loadCurrentChat();
+            }
+            saveAndRefresh();
+        }
+
+        function loadCurrentChat() {
+            const chat = chats.find(c => c.id == currentChatId);
+            if (!chat) return;
+            currentChatTitle.innerText = chat.title;
+            
+            chatBox.innerHTML = '';
+            if (chat.messages.length === 0) {
+                chatBox.innerHTML = `
+                    <div class="flex items-start space-x-4">
+                        <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm">AI</div>
+                        <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 max-w-[85%] message-content">
+                            <p>Hello ${currentUser.name}! I am Gyan, your multi-persona AI assistant. How can I help you today?</p>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            chat.messages.forEach(msg => {
+                appendMessageToDOM(msg.role, msg.content, false);
+            });
+        }
+
+        function appendMessageToDOM(role, content, save = true) {
+            const isUser = role === 'user';
+            const messageWrapper = document.createElement('div');
+            messageWrapper.className = `flex items-start space-x-4 ${isUser ? 'flex-row-reverse space-x-reverse' : ''}`;
+
+            const avatar = document.createElement('div');
+            avatar.className = `w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${isUser ? 'bg-indigo-600' : 'bg-blue-600'}`;
+            avatar.innerText = isUser ? 'U' : 'AI';
+
+            const bubble = document.createElement('div');
+            bubble.className = `rounded-2xl p-4 max-w-[85%] message-content ${isUser ? 'bg-blue-600 text-white' : 'bg-gray-900 border border-gray-800 text-gray-100'}`;
+
+            if (isUser) {
+                bubble.innerText = content;
+            } else {
+                const cleanedContent = cleanMessyText(content);
+                bubble.innerHTML = marked.parse(cleanedContent);
+                renderMathInElement(bubble, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false},
+                        {left: '\\(', right: '\\)', display: false},
+                        {left: '\\[', right: '\\]', display: true}
+                    ],
+                    throwOnError: false
+                });
+            }
+
+            messageWrapper.appendChild(avatar);
+            messageWrapper.appendChild(bubble);
+            chatBox.appendChild(messageWrapper);
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            if (save) {
+                const chat = chats.find(c => c.id == currentChatId);
+                if (chat) {
+                    chat.messages.push({ role, content });
+                    if (chat.title === 'New Conversation' && isUser) {
+                        chat.title = content.length > 25 ? content.substring(0, 25) + '...' : content;
+                        currentChatTitle.innerText = chat.title;
+                    }
+                    saveAndRefresh();
+                }
+            }
+        }
+
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const text = userInput.value.trim();
+            if (!text) return;
+
+            userInput.value = '';
+            appendMessageToDOM('user', text);
+
+            const typingId = 'typing-' + Date.now();
+            const typingWrapper = document.createElement('div');
+            typingWrapper.id = typingId;
+            typingWrapper.className = 'flex items-start space-x-4';
+            typingWrapper.innerHTML = `
+                <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm">AI</div>
+                <div class="bg-gray-900 border border-gray-800 rounded-2xl p-4 text-gray-400 italic">Thinking...</div>
+            `;
+            chatBox.appendChild(typingWrapper);
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            const chat = chats.find(c => c.id == currentChatId);
+            const persona = personaSelect.value;
+
+            try {
+                const response = await fetch('/.netlify/functions/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        messages: chat.messages.map(m => ({ role: m.role, content: m.content })),
+                        persona: persona
+                    })
+                });
+
+                const data = await response.json();
+                document.getElementById(typingId).remove();
+
+                if (data.reply) {
+                    appendMessageToDOM('assistant', data.reply);
+                } else {
+                    appendMessageToDOM('assistant', 'Error: No response generated.');
+                }
+            } catch (err) {
+                document.getElementById(typingId).remove();
+                appendMessageToDOM('assistant', 'Server error communicating with AI endpoint (Make sure you are running via Netlify Dev or deployed on Netlify).');
+            }
+        });
+
+        // Initialize Auth Check
+        checkAuth();
+    </script>
+</body>
+</html>

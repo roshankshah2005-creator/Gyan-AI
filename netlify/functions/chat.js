@@ -5,12 +5,12 @@ exports.handler = async function(event, context) {
 
     try {
         const { messages, persona } = JSON.parse(event.body || '{}');
-        const apiKey = process.env.OPENROUTER_API_KEY;
+        const apiKey = process.env.GROQ_API_KEY;
 
         if (!apiKey) {
             return {
                 statusCode: 500,
-                body: JSON.stringify({ reply: 'Server configuration error: OPENROUTER_API_KEY is missing in Netlify settings.' })
+                body: JSON.stringify({ reply: 'Server configuration error: GROQ_API_KEY is missing in Netlify settings.' })
             };
         }
 
@@ -26,16 +26,14 @@ exports.handler = async function(event, context) {
             ...messages
         ];
 
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
             headers: {
                 "Authorization": `Bearer ${apiKey}`,
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://your-site.netlify.app",
-                "X-Title": "Gyan AI"
+                "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                model: "openrouter/free", // Automatically routes to any active, working free model
+                model: "llama-3.3-70b-versatile",
                 messages: formattedMessages
             })
         });

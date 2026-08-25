@@ -26,7 +26,6 @@ exports.handler = async function(event, context) {
             ...messages
         ];
 
-        // This points strictly to Groq, completely bypassing OpenRouter
         const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
             headers: {
@@ -34,7 +33,7 @@ exports.handler = async function(event, context) {
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                model: "llama-3.3-70b-versatile", // Groq's fast free model
+                model: "llama-3.1-8b-instant", // Active, supported Groq model
                 messages: formattedMessages
             })
         });

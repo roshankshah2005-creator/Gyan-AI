@@ -33,10 +33,10 @@ exports.handler = async function(event, context) {
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                model: "openai/gpt-oss-20b", // Correct active Groq model
+                model: "llama-3.3-70b-versatile", // Correct Groq native model
                 messages: formattedMessages,
                 temperature: 0.6,
-                max_completion_tokens: 2048
+                max_tokens: 2048
             })
         });
 

@@ -35,7 +35,7 @@ exports.handler = async function(event, context) {
                 "X-Title": "Gyan AI"
             },
             body: JSON.stringify({
-                model: "nvidia/nemotron-3-ultra-550b-a55b:free", 
+                model: "nvidia/nemotron-3-ultra-550b-a55b:free", // Stable free model on OpenRouter
                 messages: formattedMessages
             })
         });

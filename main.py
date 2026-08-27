@@ -3,6 +3,10 @@ from groq import Groq
 import sqlite3
 import json
 import random
+import io
+import pypdf
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 import streamlit.components.v1 as components
 
 # 1. Page Configuration 
@@ -93,8 +97,16 @@ def init_db():
                     id INTEGER PRIMARY KEY AUTOINCREMENT, 
                     email TEXT, 
                     title TEXT, 
-                    messages TEXT
+                    messages TEXT,
+                    documents TEXT
                 )''')
+    
+    # Check if documents column exists in older database versions
+    c.execute("PRAGMA table_info(chats)")
+    chat_columns = [col[1] for col in c.fetchall()]
+    if "documents" not in chat_columns:
+        c.execute("ALTER TABLE chats ADD COLUMN documents TEXT")
+
     conn.commit()
     conn.close()
 
@@ -148,7 +160,7 @@ def update_password(email, new_password):
 def load_chats(email):
     conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
     c = conn.cursor()
-    c.execute("SELECT id, title, messages FROM chats WHERE email = ?", (email,))
+    c.execute("SELECT id, title, messages, documents FROM chats WHERE email = ?", (email,))
     rows = c.fetchall()
     conn.close()
     
@@ -157,30 +169,33 @@ def load_chats(email):
         chats.append({
             "id": row[0],
             "title": row[1],
-            "messages": json.loads(row[2])
+            "messages": json.loads(row[2]) if row[2] else [],
+            "documents": json.loads(row[3]) if row[3] else []
         })
     return chats
 
 def create_new_chat(email):
     conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
     c = conn.cursor()
-    c.execute("INSERT INTO chats (email, title, messages) VALUES (?, ?, ?)", (email, "New Conversation", json.dumps([])))
+    c.execute("INSERT INTO chats (email, title, messages, documents) VALUES (?, ?, ?, ?)", 
+              (email, "New Conversation", json.dumps([]), json.dumps([])))
     conn.commit()
     chat_id = c.lastrowid
     conn.close()
     return chat_id
 
-def save_chat_to_db(email, chat_id, title, messages):
+def save_chat_to_db(email, chat_id, title, messages, documents):
     conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
     c = conn.cursor()
     c.execute("SELECT id FROM chats WHERE id = ?", (chat_id,))
     exists = c.fetchone()
     
     messages_json = json.dumps(messages)
+    docs_json = json.dumps(documents)
     if exists:
-        c.execute("UPDATE chats SET title = ?, messages = ? WHERE id = ?", (title, messages_json, chat_id))
+        c.execute("UPDATE chats SET title = ?, messages = ?, documents = ? WHERE id = ?", (title, messages_json, docs_json, chat_id))
     else:
-        c.execute("INSERT INTO chats (email, title, messages) VALUES (?, ?, ?)", (email, title, messages_json))
+        c.execute("INSERT INTO chats (email, title, messages, documents) VALUES (?, ?, ?, ?)", (email, title, messages_json, docs_json))
     conn.commit()
     conn.close()
 
@@ -190,6 +205,55 @@ def delete_chat_from_db(chat_id):
     c.execute("DELETE FROM chats WHERE id = ?", (chat_id,))
     conn.commit()
     conn.close()
+
+# RAG Document Processing Utilities
+def extract_text_from_file(uploaded_file):
+    text = ""
+    if uploaded_file.type == "application/pdf":
+        try:
+            reader = pypdf.PdfReader(uploaded_file)
+            for page in reader.pages:
+                extracted = page.extract_text()
+                if extracted:
+                    text += extracted + "\n"
+        except Exception as e:
+            st.error(f"Error reading PDF: {e}")
+    elif uploaded_file.type == "text/plain":
+        try:
+            text = uploaded_file.getvalue().decode("utf-8")
+        except Exception as e:
+            st.error(f"Error reading text file: {e}")
+    return text
+
+def chunk_text(text, chunk_size=500, overlap=50):
+    words = text.split()
+    chunks = []
+    for i in range(0, len(words), chunk_size - overlap):
+        chunk = " ".join(words[i:i + chunk_size])
+        if chunk.strip():
+            chunks.append(chunk)
+    return chunks
+
+def retrieve_relevant_chunks(query, documents, top_k=3):
+    all_chunks = []
+    for doc in documents:
+        all_chunks.extend(doc.get("chunks", []))
+    
+    if not all_chunks:
+        return ""
+    
+    try:
+        vectorizer = TfidfVectorizer().fit(all_chunks + [query])
+        chunk_vectors = vectorizer.transform(all_chunks)
+        query_vector = vectorizer.transform([query])
+        
+        similarities = cosine_similarity(query_vector, chunk_vectors).flatten()
+        top_indices = similarities.argsort()[::-1][:top_k]
+        
+        relevant_text = "\n\n---\n\n".join([all_chunks[idx] for idx in top_indices if similarities[idx] > 0.05])
+        return relevant_text
+    except Exception:
+        return ""
 
 # 3. Session State & URL Parameter Auto-Login
 if "user_email" not in st.session_state:
@@ -341,7 +405,7 @@ groq_api_key = st.secrets.get("GROQ_API_KEY", "")
 
 st.session_state.chats = load_chats(st.session_state.user_email)
 
-# 5. Sidebar-Chat History, Persona Selector & Controls with "GYAN" Logo
+# 5. Sidebar-Chat History, Persona Selector, RAG Document Uploader & Controls
 with st.sidebar:
     st.markdown('<div class="brand-logo">GYAN</div>', unsafe_allow_html=True)
     st.caption(f"Logged in as: **{user_name}**")
@@ -360,6 +424,45 @@ with st.sidebar:
         new_id = create_new_chat(st.session_state.user_email)
         st.session_state.current_chat_id = new_id
         st.rerun()
+
+    # RAG Document Upload Section
+    st.subheader("📚 RAG Knowledge Base")
+    uploaded_file = st.file_uploader("Upload PDF or TXT context", type=["pdf", "txt"], key="rag_uploader")
+    
+    current_chat = next((c for c in st.session_state.chats if c["id"] == st.session_state.current_chat_id), None)
+    
+    if uploaded_file and current_chat:
+        # Check if already uploaded in this chat to avoid duplicate processing loops
+        already_exists = any(d["filename"] == uploaded_file.name for d in current_chat["documents"])
+        if not already_exists:
+            with st.spinner("Processing & chunking document..."):
+                raw_text = extract_text_from_file(uploaded_file)
+                if raw_text:
+                    chunks = chunk_text(raw_text)
+                    current_chat["documents"].append({
+                        "filename": uploaded_file.name,
+                        "chunks": chunks
+                    })
+                    save_chat_to_db(st.session_state.user_email, current_chat["id"], current_chat["title"], current_chat["messages"], current_chat["documents"])
+                    st.success(f"Added {uploaded_file.name} to context!")
+                    st.rerun()
+
+    if current_chat and current_chat["documents"]:
+        st.caption("Active Context Documents:")
+        docs_to_remove = []
+        for idx, doc in enumerate(current_chat["documents"]):
+            col_d1, col_d2 = st.columns([4, 1])
+            with col_d1:
+                st.text(f"• {doc['filename']}")
+            with col_d2:
+                if st.button("🗑️", key=f"del_doc_{idx}", help="Remove document"):
+                    docs_to_remove.append(idx)
+        
+        if docs_to_remove:
+            for idx in sorted(docs_to_remove, reverse=True):
+                current_chat["documents"].pop(idx)
+            save_chat_to_db(st.session_state.user_email, current_chat["id"], current_chat["title"], current_chat["messages"], current_chat["documents"])
+            st.rerun()
 
     st.subheader("Chat History")
 
@@ -423,7 +526,7 @@ if current_chat:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-if prompt := st.chat_input("Ask anything or request a structured guide..."):
+if prompt := st.chat_input("Ask anything or query your uploaded documents..."):
     if not groq_api_key:
         st.error("Groq API key is missing! Check your secrets.toml file.")
         st.stop()
@@ -456,7 +559,19 @@ if prompt := st.chat_input("Ask anything or request a structured guide..."):
         
         try:
             client = Groq(api_key=groq_api_key)
-            formatted_messages = [{"role": "system", "content": system_prompts.get(persona, system_prompts["General Companion"])}]
+            base_system_prompt = system_prompts.get(persona, system_prompts["General Companion"])
+            
+            # Retrieve relevant context if documents are uploaded
+            rag_context = ""
+            if current_chat.get("documents"):
+                rag_context = retrieve_relevant_chunks(prompt, current_chat["documents"], top_k=3)
+            
+            if rag_context:
+                final_system_content = f"{base_system_prompt}\n\nUse the following extracted document context to answer the user's question accurately if relevant:\n{rag_context}"
+            else:
+                final_system_content = base_system_prompt
+
+            formatted_messages = [{"role": "system", "content": final_system_content}]
             for m in current_chat["messages"]:
                 formatted_messages.append({"role": m["role"], "content": m["content"]})
 
@@ -482,5 +597,5 @@ if prompt := st.chat_input("Ask anything or request a structured guide..."):
             message_placeholder.markdown(full_response)
 
     current_chat["messages"].append({"role": "assistant", "content": full_response})
-    save_chat_to_db(st.session_state.user_email, current_chat["id"], current_chat["title"], current_chat["messages"])
+    save_chat_to_db(st.session_state.user_email, current_chat["id"], current_chat["title"], current_chat["messages"], current_chat["documents"])
     scroll_to_bottom()

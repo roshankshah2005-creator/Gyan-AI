@@ -1,6 +1,6 @@
 import streamlit as st
 from groq import Groq
-from streamlit_cookies_controller import CookieController
+import sqlite3
 import json
 
 # 1. Page Configuration
@@ -11,79 +11,144 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Initialize Cookie Controller
-controller = CookieController()
+# 2. Initialize SQLite Database
+def init_db():
+    conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS users (email TEXT PRIMARY KEY, name TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS chats (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                    email TEXT, 
+                    title TEXT, 
+                    messages TEXT
+                )''')
+    conn.commit()
+    conn.close()
 
-# 2. Robust Cookie-Based Session & Chat Persistence
-if "user" not in st.session_state:
-    saved_user = controller.get("gyan_logged_in_user")
-    st.session_state.user = saved_user if saved_user else None
+init_db()
 
-if "chats" not in st.session_state:
-    saved_chats = controller.get("gyan_saved_chats")
-    if saved_chats:
-        try:
-            st.session_state.chats = json.loads(saved_chats)
-        except Exception:
-            st.session_state.chats = []
+# Database Helper Functions
+def get_user(email):
+    conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
+    c = conn.cursor()
+    c.execute("SELECT name FROM users WHERE email = ?", (email,))
+    row = c.fetchone()
+    conn.close()
+    return row[0] if row else None
+
+def save_user(email, name):
+    conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
+    c = conn.cursor()
+    c.execute("INSERT OR REPLACE INTO users (email, name) VALUES (?, ?)", (email, name))
+    conn.commit()
+    conn.close()
+
+def load_chats(email):
+    conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
+    c = conn.cursor()
+    c.execute("SELECT id, title, messages FROM chats WHERE email = ?", (email,))
+    rows = c.fetchall()
+    conn.close()
+    
+    chats = []
+    for row in rows:
+        chats.append({
+            "id": row[0],
+            "title": row[1],
+            "messages": json.loads(row[2])
+        })
+    return chats
+
+def save_chat_to_db(email, chat_id, title, messages):
+    conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
+    c = conn.cursor()
+    c.execute("SELECT id FROM chats WHERE id = ?", (chat_id,))
+    exists = c.fetchone()
+    
+    messages_json = json.dumps(messages)
+    if exists:
+        c.execute("UPDATE chats SET title = ?, messages = ? WHERE id = ?", (title, messages_json, chat_id))
     else:
-        st.session_state.chats = []
+        c.execute("INSERT INTO chats (email, title, messages) VALUES (?, ?, ?)", (email, title, messages_json))
+    conn.commit()
+    conn.close()
 
+def delete_chat_from_db(chat_id):
+    conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
+    c = conn.cursor()
+    c.execute("DELETE FROM chats WHERE id = ?", (chat_id,))
+    conn.commit()
+    conn.close()
+
+# 3. Session State Management
+if "user_email" not in st.session_state:
+    st.session_state.user_email = None
+if "chats" not in st.session_state:
+    st.session_state.chats = []
 if "current_chat_id" not in st.session_state:
-    saved_chat_id = controller.get("gyan_current_chat_id")
-    st.session_state.current_chat_id = int(saved_chat_id) if saved_chat_id else None
+    st.session_state.current_chat_id = None
 
-def save_state_to_cookies():
-    controller.set("gyan_logged_in_user", st.session_state.user, max_age=30*24*60*60)
-    controller.set("gyan_saved_chats", json.dumps(st.session_state.chats), max_age=30*24*60*60)
-    controller.set("gyan_current_chat_id", str(st.session_state.current_chat_id), max_age=30*24*60*60)
-
-# 3. Authentication Screen
-if not st.session_state.user:
+# 4. Authentication Screen
+if not st.session_state.user_email:
     st.title("Welcome to Gyan AI")
-    st.markdown("Please enter your details to get started.")
+    st.markdown("Please enter your details to sign in or register.")
     
     with st.form("auth_form"):
         name_input = st.text_input("Your Name")
-        email_input = st.text_input("Email Address")
+        email_input = st.text_input("Email Address (Used to save your account)")
         submit_auth = st.form_submit_button("Continue to App")
         
         if submit_auth:
-            if name_input.strip() and email_input.strip():
-                user_data = {"name": name_input, "email": email_input}
-                st.session_state.user = user_data
+            name = name_input.strip()
+            email = email_input.strip().lower()
+            if name and email:
+                save_user(email, name)
+                st.session_state.user_email = email
                 
-                initial_chat_id = 1
-                st.session_state.chats = [{
-                    "id": initial_chat_id,
-                    "title": "New Conversation",
-                    "messages": []
-                }]
-                st.session_state.current_chat_id = initial_chat_id
+                # Load user's chats from SQLite
+                user_chats = load_chats(email)
+                if not user_chats:
+                    # Create a default first chat
+                    conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
+                    c = conn.cursor()
+                    c.execute("INSERT INTO chats (email, title, messages) VALUES (?, ?, ?)", (email, "New Conversation", json.dumps([])))
+                    conn.commit()
+                    new_chat_id = c.lastrowid
+                    conn.close()
+                    user_chats = [{"id": new_chat_id, "title": "New Conversation", "messages": []}]
                 
-                save_state_to_cookies()
+                st.session_state.chats = user_chats
+                st.session_state.current_chat_id = user_chats[0]["id"]
                 st.rerun()
             else:
-                st.error("Please fill in both fields.")
+                st.error("Please fill in both fields correctly.")
     st.stop()
+
+# Retrieve user name from database
+user_name = get_user(st.session_state.user_email)
 
 # Get API key from Streamlit Secrets
 groq_api_key = st.secrets.get("GROQ_API_KEY", "")
 
-# 4. Sidebar: Chat History & Controls
+# 5. Sidebar: Chat History & Controls
 with st.sidebar:
     st.title("Gyan AI")
-    st.caption(f"Logged in as: **{st.session_state.user['name']}**")
+    st.caption(f"Logged in as: **{user_name}**")
     
     if st.button("➕ New Chat", use_container_width=True):
-        new_id = int(st.session_state.chats[0]["id"] + 1) if st.session_state.chats else 1
+        conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
+        c = conn.cursor()
+        c.execute("INSERT INTO chats (email, title, messages) VALUES (?, ?, ?)", (st.session_state.user_email, "New Conversation", json.dumps([])))
+        conn.commit()
+        new_id = c.lastrowid
+        conn.close()
+        
         st.session_state.chats.insert(0, {
             "id": new_id,
             "title": "New Conversation",
             "messages": []
         })
         st.session_state.current_chat_id = new_id
-        save_state_to_cookies()
         st.rerun()
 
     st.markdown("---")
@@ -97,43 +162,40 @@ with st.sidebar:
             btn_type = "primary" if is_active else "secondary"
             if st.button(chat["title"], key=f"chat_{chat['id']}", type=btn_type, use_container_width=True):
                 st.session_state.current_chat_id = chat["id"]
-                save_state_to_cookies()
                 st.rerun()
         with col2:
             if st.button("❌", key=f"del_{chat['id']}", help="Delete chat"):
                 chats_to_delete.append(chat["id"])
 
     if chats_to_delete:
+        for cid in chats_to_delete:
+            delete_chat_from_db(cid)
         st.session_state.chats = [c for c in st.session_state.chats if c["id"] not in chats_to_delete]
         if not st.session_state.chats:
-            new_id = 1
+            conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
+            c = conn.cursor()
+            c.execute("INSERT INTO chats (email, title, messages) VALUES (?, ?, ?)", (st.session_state.user_email, "New Conversation", json.dumps([])))
+            conn.commit()
+            new_id = c.lastrowid
+            conn.close()
             st.session_state.chats = [{"id": new_id, "title": "New Conversation", "messages": []}]
             st.session_state.current_chat_id = new_id
         else:
             st.session_state.current_chat_id = st.session_state.chats[0]["id"]
-        save_state_to_cookies()
         st.rerun()
 
     st.markdown("---")
     if st.button("Log Out", use_container_width=True):
-        controller.remove("gyan_logged_in_user")
-        controller.remove("gyan_saved_chats")
-        controller.remove("gyan_current_chat_id")
-        st.session_state.user = None
+        st.session_state.user_email = None
         st.session_state.chats = []
+        st.session_state.current_chat_id = None
         st.rerun()
 
-# 5. Main Chat Interface
+# 6. Main Chat Interface
 current_chat = next((c for c in st.session_state.chats if c["id"] == st.session_state.current_chat_id), None)
-if not current_chat:
-    if st.session_state.chats:
-        current_chat = st.session_state.chats[0]
-        st.session_state.current_chat_id = current_chat["id"]
-    else:
-        initial_chat_id = 1
-        st.session_state.chats = [{"id": initial_chat_id, "title": "New Conversation", "messages": []}]
-        st.session_state.current_chat_id = initial_chat_id
-        current_chat = st.session_state.chats[0]
+if not current_chat and st.session_state.chats:
+    current_chat = st.session_state.chats[0]
+    st.session_state.current_chat_id = current_chat["id"]
 
 col_title, col_persona = st.columns([2, 2])
 with col_title:
@@ -207,11 +269,11 @@ if prompt := st.chat_input("Ask anything or request a structured guide..."):
             message_placeholder.markdown(reply)
             current_chat["messages"].append({"role": "assistant", "content": reply})
             
-            # Save updated chats to cookies
-            save_state_to_cookies()
+            # Save to SQLite database immediately
+            save_chat_to_db(st.session_state.user_email, current_chat["id"], current_chat["title"], current_chat["messages"])
             
         except Exception as e:
             error_msg = f"AI Error: {str(e)}"
             message_placeholder.markdown(error_msg)
             current_chat["messages"].append({"role": "assistant", "content": error_msg})
-            save_state_to_cookies()
+            save_chat_to_db(st.session_state.user_email, current_chat["id"], current_chat["title"], current_chat["messages"])

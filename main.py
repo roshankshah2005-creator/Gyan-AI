@@ -2,6 +2,7 @@ import streamlit as st
 from groq import Groq
 import sqlite3
 import json
+import random
 import streamlit.components.v1 as components
 
 # 1. Page Configuration & Custom CSS to Hide GitHub/Streamlit Header Icons
@@ -114,6 +115,13 @@ def verify_user(email, password):
         return row[0]
     return None
 
+def update_password(email, new_password):
+    conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
+    c = conn.cursor()
+    c.execute("UPDATE users SET password = ? WHERE email = ?", (new_password, email))
+    conn.commit()
+    conn.close()
+
 def load_chats(email):
     conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
     c = conn.cursor()
@@ -176,10 +184,46 @@ if "chats" not in st.session_state:
     st.session_state.chats = []
 if "current_chat_id" not in st.session_state:
     st.session_state.current_chat_id = None
+if "forgot_password_mode" not in st.session_state:
+    st.session_state.forgot_password_mode = False
 
-# 4. Separate Authentication Screen (Sign Up / Log In)
+# Initialize math captcha numbers if not present
+if "captcha_num1" not in st.session_state:
+    st.session_state.captcha_num1 = random.randint(1, 10)
+    st.session_state.captcha_num2 = random.randint(1, 10)
+
+# 4. Authentication & Forgot Password Screen
 if not st.session_state.user_email:
     st.title("Welcome to Gyan AI")
+    
+    # Handle Forgot Password View
+    if st.session_state.forgot_password_mode:
+        st.subheader("Reset Password")
+        with st.form("forgot_password_form"):
+            reset_email = st.text_input("Enter your registered Email Address").strip().lower()
+            new_pass = st.text_input("Enter New Password", type="password").strip()
+            submit_reset = st.form_submit_button("Update Password")
+            back_to_login = st.form_submit_button("Back to Log In")
+            
+            if submit_reset:
+                if reset_email and new_pass:
+                    user_exists = get_user(reset_email)
+                    if user_exists:
+                        update_password(reset_email, new_pass)
+                        st.success("Password updated successfully! Please log in.")
+                        st.session_state.forgot_password_mode = False
+                        st.rerun()
+                    else:
+                        st.error("No account found with this email address.")
+                else:
+                    st.error("Please fill in both fields.")
+            
+            if back_to_login:
+                st.session_state.forgot_password_mode = False
+                st.rerun()
+        st.stop()
+
+    # Normal Auth Mode (Log In / Sign Up)
     auth_mode = st.radio("Choose Action", ["Log In", "Sign Up"], horizontal=True)
     
     if auth_mode == "Log In":
@@ -198,7 +242,7 @@ if not st.session_state.user_email:
                     
                     user_chats = load_chats(email)
                     if not user_chats:
-                        fallback_id = create_new_chat(email)
+                        create_new_chat(email)
                         user_chats = load_chats(email)
                     
                     st.session_state.chats = user_chats
@@ -206,18 +250,42 @@ if not st.session_state.user_email:
                     st.rerun()
                 else:
                     st.error("Invalid email or password.")
+        
+        if st.button("Forgot Password?"):
+            st.session_state.forgot_password_mode = True
+            st.rerun()
+
     else:
         with st.form("signup_form"):
             name_input = st.text_input("Your Name")
             email_input = st.text_input("Email Address")
             password_input = st.text_input("Password", type="password")
+            
+            # Bot Verification Math CAPTCHA
+            n1 = st.session_state.captcha_num1
+            n2 = st.session_state.captcha_num2
+            captcha_input = st.text_input(f"Human Verification: What is {n1} + {n2}?")
+            
             submit_signup = st.form_submit_button("Sign Up")
             
             if submit_signup:
                 name = name_input.strip()
                 email = email_input.strip().lower()
                 password = password_input.strip()
-                if name and email and password:
+                
+                try:
+                    user_answer = int(captcha_input.strip())
+                except ValueError:
+                    user_answer = -999
+
+                if not name or not email or not password:
+                    st.error("Please fill in all fields correctly.")
+                elif user_answer != (n1 + n2):
+                    st.error("Incorrect verification answer! Please try again.")
+                    # Refresh captcha numbers on failure
+                    st.session_state.captcha_num1 = random.randint(1, 10)
+                    st.session_state.captcha_num2 = random.randint(1, 10)
+                else:
                     success = register_user(email, name, password)
                     if success:
                         st.session_state.user_email = email
@@ -229,8 +297,6 @@ if not st.session_state.user_email:
                         st.rerun()
                     else:
                         st.error("Email is already registered! Please switch to Log In.")
-                else:
-                    st.error("Please fill in all fields correctly.")
     st.stop()
 
 user_name = get_user(st.session_state.user_email)
@@ -368,8 +434,10 @@ if prompt := st.chat_input("Ask anything or request a structured guide..."):
             for chunk in stream:
                 if chunk.choices[0].delta.content is not None:
                     full_response += chunk.choices[0].delta.content
-                    message_placeholder.markdown(full_response + "▌")
+                    display_text = full_response.lstrip(" .<br>•\n")
+                    message_placeholder.markdown(display_text + "▌")
             
+            full_response = full_response.lstrip(" .<br>•\n")
             message_placeholder.markdown(full_response)
             
         except Exception as e:

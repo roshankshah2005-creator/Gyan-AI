@@ -165,11 +165,22 @@ def load_chats(email):
     
     chats = []
     for row in rows:
+        doc_data = None
+        if row[3]:
+            try:
+                parsed = json.loads(row[3])
+                if isinstance(parsed, list) and len(parsed) > 0:
+                    doc_data = parsed[-1] # Backward compatibility: take the last if it was a list
+                elif isinstance(parsed, dict):
+                    doc_data = parsed
+            except:
+                doc_data = None
+                
         chats.append({
             "id": row[0],
             "title": row[1],
             "messages": json.loads(row[2]) if row[2] else [],
-            "documents": json.loads(row[3]) if row[3] else []
+            "document": doc_data
         })
     return chats
 
@@ -177,24 +188,24 @@ def create_new_chat(email):
     conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
     c = conn.cursor()
     c.execute("INSERT INTO chats (email, title, messages, documents) VALUES (?, ?, ?, ?)", 
-              (email, "New Conversation", json.dumps([]), json.dumps([])))
+              (email, "New Conversation", json.dumps([]), json.dumps(None)))
     conn.commit()
     chat_id = c.lastrowid
     conn.close()
     return chat_id
 
-def save_chat_to_db(email, chat_id, title, messages, documents):
+def save_chat_to_db(email, chat_id, title, messages, document):
     conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
     c = conn.cursor()
     c.execute("SELECT id FROM chats WHERE id = ?", (chat_id,))
     exists = c.fetchone()
     
     messages_json = json.dumps(messages)
-    docs_json = json.dumps(documents)
+    doc_json = json.dumps(document)
     if exists:
-        c.execute("UPDATE chats SET title = ?, messages = ?, documents = ? WHERE id = ?", (title, messages_json, docs_json, chat_id))
+        c.execute("UPDATE chats SET title = ?, messages = ?, documents = ? WHERE id = ?", (title, messages_json, doc_json, chat_id))
     else:
-        c.execute("INSERT INTO chats (email, title, messages, documents) VALUES (?, ?, ?, ?)", (email, title, messages_json, docs_json))
+        c.execute("INSERT INTO chats (email, title, messages, documents) VALUES (?, ?, ?, ?)", (email, title, messages_json, doc_json))
     conn.commit()
     conn.close()
 
@@ -233,13 +244,10 @@ def chunk_text(text, chunk_size=400, overlap=50):
             chunks.append(chunk)
     return chunks
 
-def retrieve_relevant_chunks(query, documents, top_k=5):
-    all_chunks = []
-    for doc in documents:
-        all_chunks.extend(doc.get("chunks", []))
-    
-    if not all_chunks:
+def retrieve_relevant_chunks(query, document, top_k=5):
+    if not document or not document.get("chunks"):
         return ""
+    all_chunks = document["chunks"]
     
     try:
         vectorizer = TfidfVectorizer().fit(all_chunks + [query])
@@ -249,11 +257,9 @@ def retrieve_relevant_chunks(query, documents, top_k=5):
         similarities = cosine_similarity(query_vector, chunk_vectors).flatten()
         top_indices = similarities.argsort()[::-1][:top_k]
         
-        # Pull top relevant chunks reliably without arbitrary dropping
         relevant_text = "\n\n---\n\n".join([all_chunks[idx] for idx in top_indices])
         return relevant_text
     except Exception:
-        # Fallback to returning the first few chunks if vectorizer fails
         return "\n\n---\n\n".join(all_chunks[:top_k])
 
 # 3. Session State & URL Parameter Auto-Login
@@ -406,7 +412,7 @@ groq_api_key = st.secrets.get("GROQ_API_KEY", "")
 
 st.session_state.chats = load_chats(st.session_state.user_email)
 
-# 5. Sidebar-Chat History, Persona Selector, RAG Document Uploader & Controls
+# 5. Sidebar-Chat History, Persona Selector, Single Document Uploader & Controls
 with st.sidebar:
     st.markdown('<div class="brand-logo">GYAN</div>', unsafe_allow_html=True)
     st.caption(f"Logged in as: **{user_name}**")
@@ -426,45 +432,39 @@ with st.sidebar:
         st.session_state.current_chat_id = new_id
         st.rerun()
 
-    # RAG Document Upload Section
-    st.subheader("📚 RAG Knowledge Base")
-    uploaded_file = st.file_uploader("Upload PDF or TXT context", type=["pdf", "txt"], key="rag_uploader")
+    # Single Document Uploader Section
+    st.subheader("📚 Knowledge Base Document")
+    uploaded_file = st.file_uploader("Upload single PDF or TXT", type=["pdf", "txt"], key="rag_uploader")
     
     current_chat = next((c for c in st.session_state.chats if c["id"] == st.session_state.current_chat_id), None)
     
     if uploaded_file and current_chat:
-        already_exists = any(d["filename"] == uploaded_file.name for d in current_chat["documents"])
-        if not already_exists:
+        current_doc = current_chat.get("document")
+        if not current_doc or current_doc.get("filename") != uploaded_file.name:
             with st.spinner("Processing & chunking document..."):
                 raw_text = extract_text_from_file(uploaded_file)
                 if raw_text and len(raw_text.strip()) > 0:
                     chunks = chunk_text(raw_text)
-                    current_chat["documents"].append({
+                    current_chat["document"] = {
                         "filename": uploaded_file.name,
                         "chunks": chunks
-                    })
-                    save_chat_to_db(st.session_state.user_email, current_chat["id"], current_chat["title"], current_chat["messages"], current_chat["documents"])
-                    st.success(f"Added {uploaded_file.name} ({len(raw_text)} chars)! Ready.")
+                    }
+                    save_chat_to_db(st.session_state.user_email, current_chat["id"], current_chat["title"], current_chat["messages"], current_chat["document"])
+                    st.success(f"Loaded {uploaded_file.name}!")
                     st.rerun()
                 else:
                     st.error("Could not extract text. Make sure your PDF has selectable text.")
 
-    if current_chat and current_chat["documents"]:
-        st.caption("Active Context Documents:")
-        docs_to_remove = []
-        for idx, doc in enumerate(current_chat["documents"]):
-            col_d1, col_d2 = st.columns([4, 1])
-            with col_d1:
-                st.text(f"• {doc['filename']}")
-            with col_d2:
-                if st.button("🗑️", key=f"del_doc_{idx}", help="Remove document"):
-                    docs_to_remove.append(idx)
-        
-        if docs_to_remove:
-            for idx in sorted(docs_to_remove, reverse=True):
-                current_chat["documents"].pop(idx)
-            save_chat_to_db(st.session_state.user_email, current_chat["id"], current_chat["title"], current_chat["messages"], current_chat["documents"])
-            st.rerun()
+    if current_chat and current_chat.get("document"):
+        st.caption("Active Document:")
+        col_d1, col_d2 = st.columns([4, 1])
+        with col_d1:
+            st.text(f"• {current_chat['document']['filename']}")
+        with col_d2:
+            if st.button("🗑️", key="del_doc", help="Remove document"):
+                current_chat["document"] = None
+                save_chat_to_db(st.session_state.user_email, current_chat["id"], current_chat["title"], current_chat["messages"], current_chat["document"])
+                st.rerun()
 
     st.subheader("Chat History")
 
@@ -527,7 +527,7 @@ if current_chat:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-if prompt := st.chat_input("Ask anything or query your uploaded documents..."):
+if prompt := st.chat_input("Ask anything or query your uploaded document..."):
     if not groq_api_key:
         st.error("Groq API key is missing! Check your secrets.toml file.")
         st.stop()
@@ -563,8 +563,8 @@ if prompt := st.chat_input("Ask anything or query your uploaded documents..."):
             base_system_prompt = system_prompts.get(persona, system_prompts["General Companion"])
             
             rag_context = ""
-            if current_chat.get("documents"):
-                rag_context = retrieve_relevant_chunks(prompt, current_chat["documents"], top_k=6)
+            if current_chat.get("document"):
+                rag_context = retrieve_relevant_chunks(prompt, current_chat["document"], top_k=6)
             
             if rag_context:
                 final_system_content = f"{base_system_prompt}\n\n[CONTEXT KNOWLEDGE BASE]\nUse the following extracted document text to answer the user's question accurately and thoroughly:\n{rag_context}"
@@ -597,5 +597,5 @@ if prompt := st.chat_input("Ask anything or query your uploaded documents..."):
             message_placeholder.markdown(full_response)
 
     current_chat["messages"].append({"role": "assistant", "content": full_response})
-    save_chat_to_db(st.session_state.user_email, current_chat["id"], current_chat["title"], current_chat["messages"], current_chat["documents"])
+    save_chat_to_db(st.session_state.user_email, current_chat["id"], current_chat["title"], current_chat["messages"], current_chat["document"])
     scroll_to_bottom()

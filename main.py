@@ -1,5 +1,6 @@
 import streamlit as st
 from groq import Groq
+from streamlit_cookies_controller import CookieController
 import sqlite3
 import json
 
@@ -10,6 +11,9 @@ st.set_page_config(
     layout="centered",
     initial_sidebar_state="expanded"
 )
+
+# Initialize Cookie Controller for persistent login
+controller = CookieController()
 
 # 2. Initialize SQLite Database
 def init_db():
@@ -80,9 +84,18 @@ def delete_chat_from_db(chat_id):
     conn.commit()
     conn.close()
 
-# 3. Session State Management
+# 3. Session State & Persistent Cookie Auto-Login
 if "user_email" not in st.session_state:
-    st.session_state.user_email = None
+    saved_email = controller.get("gyan_user_email")
+    if saved_email:
+        st.session_state.user_email = saved_email
+        user_chats = load_chats(saved_email)
+        st.session_state.chats = user_chats if user_chats else []
+        if user_chats:
+            st.session_state.current_chat_id = user_chats[0]["id"]
+    else:
+        st.session_state.user_email = None
+
 if "chats" not in st.session_state:
     st.session_state.chats = []
 if "current_chat_id" not in st.session_state:
@@ -105,10 +118,12 @@ if not st.session_state.user_email:
                 save_user(email, name)
                 st.session_state.user_email = email
                 
+                # Save only the small email string in browser cookie for persistence
+                controller.set("gyan_user_email", email, max_age=30*24*60*60)
+                
                 # Load user's chats from SQLite
                 user_chats = load_chats(email)
                 if not user_chats:
-                    # Create a default first chat
                     conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
                     c = conn.cursor()
                     c.execute("INSERT INTO chats (email, title, messages) VALUES (?, ?, ?)", (email, "New Conversation", json.dumps([])))
@@ -186,6 +201,7 @@ with st.sidebar:
 
     st.markdown("---")
     if st.button("Log Out", use_container_width=True):
+        controller.remove("gyan_user_email")
         st.session_state.user_email = None
         st.session_state.chats = []
         st.session_state.current_chat_id = None

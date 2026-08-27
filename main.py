@@ -1,6 +1,7 @@
 import streamlit as st
 from groq import Groq
 from streamlit_cookies_controller import CookieController
+import json
 
 # 1. Page Configuration
 st.set_page_config(
@@ -10,21 +11,34 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Initialize Cookie Controller for persistent sessions
+# Initialize Cookie Controller
 controller = CookieController()
 
-# 2. Initialize Session State & Check Cookies
+# 2. Robust Cookie-Based Session & Chat Persistence
 if "user" not in st.session_state:
-    # Attempt to restore user session from browser cookies on refresh
     saved_user = controller.get("gyan_logged_in_user")
     st.session_state.user = saved_user if saved_user else None
 
 if "chats" not in st.session_state:
-    st.session_state.chats = []
-if "current_chat_id" not in st.session_state:
-    st.session_state.current_chat_id = None
+    saved_chats = controller.get("gyan_saved_chats")
+    if saved_chats:
+        try:
+            st.session_state.chats = json.loads(saved_chats)
+        except Exception:
+            st.session_state.chats = []
+    else:
+        st.session_state.chats = []
 
-# 3. Authentication Screen (Skipped automatically if cookie exists)
+if "current_chat_id" not in st.session_state:
+    saved_chat_id = controller.get("gyan_current_chat_id")
+    st.session_state.current_chat_id = int(saved_chat_id) if saved_chat_id else None
+
+def save_state_to_cookies():
+    controller.set("gyan_logged_in_user", st.session_state.user, max_age=30*24*60*60)
+    controller.set("gyan_saved_chats", json.dumps(st.session_state.chats), max_age=30*24*60*60)
+    controller.set("gyan_current_chat_id", str(st.session_state.current_chat_id), max_age=30*24*60*60)
+
+# 3. Authentication Screen
 if not st.session_state.user:
     st.title("Welcome to Gyan AI")
     st.markdown("Please enter your details to get started.")
@@ -39,9 +53,6 @@ if not st.session_state.user:
                 user_data = {"name": name_input, "email": email_input}
                 st.session_state.user = user_data
                 
-                # Save session in browser cookie (persists on page refresh)
-                controller.set("gyan_logged_in_user", user_data, max_age=30*24*60*60)
-                
                 initial_chat_id = 1
                 st.session_state.chats = [{
                     "id": initial_chat_id,
@@ -49,6 +60,8 @@ if not st.session_state.user:
                     "messages": []
                 }]
                 st.session_state.current_chat_id = initial_chat_id
+                
+                save_state_to_cookies()
                 st.rerun()
             else:
                 st.error("Please fill in both fields.")
@@ -70,6 +83,7 @@ with st.sidebar:
             "messages": []
         })
         st.session_state.current_chat_id = new_id
+        save_state_to_cookies()
         st.rerun()
 
     st.markdown("---")
@@ -83,6 +97,7 @@ with st.sidebar:
             btn_type = "primary" if is_active else "secondary"
             if st.button(chat["title"], key=f"chat_{chat['id']}", type=btn_type, use_container_width=True):
                 st.session_state.current_chat_id = chat["id"]
+                save_state_to_cookies()
                 st.rerun()
         with col2:
             if st.button("❌", key=f"del_{chat['id']}", help="Delete chat"):
@@ -96,12 +111,14 @@ with st.sidebar:
             st.session_state.current_chat_id = new_id
         else:
             st.session_state.current_chat_id = st.session_state.chats[0]["id"]
+        save_state_to_cookies()
         st.rerun()
 
     st.markdown("---")
     if st.button("Log Out", use_container_width=True):
-        # Clear cookie and session state on logout
         controller.remove("gyan_logged_in_user")
+        controller.remove("gyan_saved_chats")
+        controller.remove("gyan_current_chat_id")
         st.session_state.user = None
         st.session_state.chats = []
         st.rerun()
@@ -190,7 +207,11 @@ if prompt := st.chat_input("Ask anything or request a structured guide..."):
             message_placeholder.markdown(reply)
             current_chat["messages"].append({"role": "assistant", "content": reply})
             
+            # Save updated chats to cookies
+            save_state_to_cookies()
+            
         except Exception as e:
             error_msg = f"AI Error: {str(e)}"
             message_placeholder.markdown(error_msg)
             current_chat["messages"].append({"role": "assistant", "content": error_msg})
+            save_state_to_cookies()

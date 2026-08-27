@@ -5,7 +5,7 @@ import json
 import random
 import streamlit.components.v1 as components
 
-# 1. Page Configuration & Custom CSS (Fully responsive, hides top header & GitHub share options)
+# 1. Page Configuration 
 st.set_page_config(
     page_title="GYAN - Intelligent Companion",
     page_icon="🧠",
@@ -341,7 +341,7 @@ groq_api_key = st.secrets.get("GROQ_API_KEY", "")
 
 st.session_state.chats = load_chats(st.session_state.user_email)
 
-# 5. Sidebar: Chat History, Persona Selector & Controls with "GYAN" Logo
+# 5. Sidebar-Chat History, Persona Selector & Controls with "GYAN" Logo
 with st.sidebar:
     st.markdown('<div class="brand-logo">GYAN</div>', unsafe_allow_html=True)
     st.caption(f"Logged in as: **{user_name}**")

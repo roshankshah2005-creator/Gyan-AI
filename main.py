@@ -250,11 +250,9 @@ if not current_chat and st.session_state.chats:
     current_chat = st.session_state.chats[0]
     st.session_state.current_chat_id = current_chat["id"]
 
-# Display centered greeting only if messages list is empty; otherwise show the chat title
+# Display centered greeting only if messages list is empty; otherwise render nothing at the top
 if current_chat and len(current_chat["messages"]) == 0:
     st.markdown(f"<h1 style='text-align: center; margin-top: 20vh;'>How can I help you, {user_name}!!</h1>", unsafe_allow_html=True)
-else:
-    st.header(current_chat["title"] if current_chat else "Gyan AI")
 
 system_prompts = {
     "General Companion": "You are Gyan, an intelligent multi-persona AI companion created by Roshan, a student of NIT Durgapur.",

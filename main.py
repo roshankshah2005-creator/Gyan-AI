@@ -5,7 +5,7 @@ import json
 import random
 import streamlit.components.v1 as components
 
-# 1. Page Configuration & Custom CSS (Fully responsive for mobile & laptop)
+# 1. Page Configuration & Custom CSS (Fully responsive, hides floating GitHub badge on mobile/desktop)
 st.set_page_config(
     page_title="GYAN - Intelligent Companion",
     page_icon="🧠",
@@ -30,10 +30,13 @@ st.markdown("""
             margin-bottom: 5px;
         }
 
-        /* Hide Streamlit menu and GitHub share button, keeping the header safe for mobile toggle */
+        /* Hide Streamlit menu, deployment button, footer, and floating GitHub fork badge */
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
         .stDeployButton {display:none;}
+        div.viewerBadge_container__1QSob, .viewerBadge_link__1S137, footer ~ div {
+            display: none !important;
+        }
         
         /* Ensure mobile sidebar toggle button is always clearly visible */
         [data-testid="collapsedControl"] {

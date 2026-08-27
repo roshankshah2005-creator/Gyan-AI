@@ -538,7 +538,7 @@ if prompt := st.chat_input("Ask anything or query your uploaded documents..."):
         try:
             client_temp = Groq(api_key=groq_api_key)
             title_res = client_temp.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+                model="openai/gpt-oss-20b",
                 messages=[
                     {"role": "system", "content": "Generate a short title (max 4 words) summarizing this query. No quotes, no punctuation."},
                     {"role": "user", "content": prompt}
@@ -571,9 +571,9 @@ if prompt := st.chat_input("Ask anything or query your uploaded documents..."):
             for m in current_chat["messages"]:
                 formatted_messages.append({"role": m["role"], "content": m["content"]})
 
-            # Increased max_tokens and using llama-3.3-70b-versatile for stability and depth
+            # Using supported Groq model 'openai/gpt-oss-20b'
             stream = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+                model="openai/gpt-oss-20b",
                 messages=formatted_messages,
                 temperature=0.5,
                 max_tokens=2048,

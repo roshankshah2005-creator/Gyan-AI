@@ -250,9 +250,9 @@ if not current_chat and st.session_state.chats:
     current_chat = st.session_state.chats[0]
     st.session_state.current_chat_id = current_chat["id"]
 
-# Display "Hi, Username" for new empty chats, then switch to chat title once started
+# Display "Hi, Username!!" with emoji for empty chats, then switch to chat title once started
 if current_chat and (current_chat["title"] == "New Conversation" or len(current_chat["messages"]) == 0):
-    st.header(f"Hi, {user_name} 👋")
+    st.header(f"Hi, {user_name}!! 👋")
 else:
     st.header(current_chat["title"] if current_chat else "Gyan AI")
 

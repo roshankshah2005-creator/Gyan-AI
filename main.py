@@ -1,8 +1,11 @@
 import streamlit as st
 from groq import Groq
-import sqlite3
+import psycopg2
+import psycopg2.extras
 import json
 import random
+import hashlib
+from pypdf import PdfReader
 import streamlit.components.v1 as components
 
 # 1. Page Configuration 
@@ -78,77 +81,95 @@ def scroll_to_bottom():
     """
     components.html(js, height=0, width=0)
 
-# 2. Initialize SQLite Database
-def init_db():
-    conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS users (email TEXT PRIMARY KEY, name TEXT)''')
-    
-    c.execute("PRAGMA table_info(users)")
-    columns = [col[1] for col in c.fetchall()]
-    if "password" not in columns:
-        c.execute("ALTER TABLE users ADD COLUMN password TEXT")
+# Security Helper: Hash Passwords
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
 
-    c.execute('''CREATE TABLE IF NOT EXISTS chats (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                    email TEXT, 
-                    title TEXT, 
-                    messages TEXT
-                )''')
-    conn.commit()
-    conn.close()
+# 2. Initialize PostgreSQL Database Connection
+def get_db_connection():
+    db_config = st.secrets.get("postgres", {
+        "host": "localhost",
+        "database": "gyan_ai",
+        "user": "postgres",
+        "password": "",
+        "port": "5432"
+    })
+    conn = psycopg2.connect(
+        host=db_config["host"],
+        database=db_config["database"],
+        user=db_config["user"],
+        password=db_config["password"],
+        port=db_config["port"]
+    )
+    return conn
+
+def init_db():
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute('''CREATE TABLE IF NOT EXISTS users (
+                        email TEXT PRIMARY KEY, 
+                        name TEXT, 
+                        password TEXT
+                    )''')
+        c.execute('''CREATE TABLE IF NOT EXISTS chats (
+                        id SERIAL PRIMARY KEY, 
+                        email TEXT, 
+                        title TEXT, 
+                        messages TEXT
+                    )''')
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        st.error(f"Database Connection Error: {e}")
 
 init_db()
 
-# Database Helper Functions
+# Database Helper Functions (PostgreSQL)
 def get_user(email):
-    conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
+    conn = get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT name FROM users WHERE email = ?", (email,))
+    c.execute("SELECT name FROM users WHERE email = %s", (email,))
     row = c.fetchone()
     conn.close()
     return row[0] if row else None
 
 def register_user(email, name, password):
-    conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
+    conn = get_db_connection()
     c = conn.cursor()
-    
-    c.execute("PRAGMA table_info(users)")
-    columns = [col[1] for col in c.fetchall()]
-    if "password" not in columns:
-        c.execute("ALTER TABLE users ADD COLUMN password TEXT")
-        conn.commit()
-
-    c.execute("SELECT email FROM users WHERE email = ?", (email,))
+    c.execute("SELECT email FROM users WHERE email = %s", (email,))
     if c.fetchone():
         conn.close()
         return False
-    c.execute("INSERT INTO users (email, name, password) VALUES (?, ?, ?)", (email, name, password))
+    
+    hashed_pass = hash_password(password)
+    c.execute("INSERT INTO users (email, name, password) VALUES (%s, %s, %s)", (email, name, hashed_pass))
     conn.commit()
     conn.close()
     return True
 
 def verify_user(email, password):
-    conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
+    conn = get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT name, password FROM users WHERE email = ?", (email,))
+    c.execute("SELECT name, password FROM users WHERE email = %s", (email,))
     row = c.fetchone()
     conn.close()
-    if row and row[1] == password:
+    if row and row[1] == hash_password(password):
         return row[0]
     return None
 
 def update_password(email, new_password):
-    conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
+    conn = get_db_connection()
     c = conn.cursor()
-    c.execute("UPDATE users SET password = ? WHERE email = ?", (new_password, email))
+    hashed_pass = hash_password(new_password)
+    c.execute("UPDATE users SET password = %s WHERE email = %s", (hashed_pass, email))
     conn.commit()
     conn.close()
 
 def load_chats(email):
-    conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
+    conn = get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT id, title, messages FROM chats WHERE email = ?", (email,))
+    c.execute("SELECT id, title, messages FROM chats WHERE email = %s", (email,))
     rows = c.fetchall()
     conn.close()
     
@@ -162,32 +183,32 @@ def load_chats(email):
     return chats
 
 def create_new_chat(email):
-    conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
+    conn = get_db_connection()
     c = conn.cursor()
-    c.execute("INSERT INTO chats (email, title, messages) VALUES (?, ?, ?)", (email, "New Conversation", json.dumps([])))
+    c.execute("INSERT INTO chats (email, title, messages) VALUES (%s, %s, %s) RETURNING id", (email, "New Conversation", json.dumps([])))
+    chat_id = c.fetchone()[0]
     conn.commit()
-    chat_id = c.lastrowid
     conn.close()
     return chat_id
 
 def save_chat_to_db(email, chat_id, title, messages):
-    conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
+    conn = get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT id FROM chats WHERE id = ?", (chat_id,))
+    c.execute("SELECT id FROM chats WHERE id = %s", (chat_id,))
     exists = c.fetchone()
     
     messages_json = json.dumps(messages)
     if exists:
-        c.execute("UPDATE chats SET title = ?, messages = ? WHERE id = ?", (title, messages_json, chat_id))
+        c.execute("UPDATE chats SET title = %s, messages = %s WHERE id = %s", (title, messages_json, chat_id))
     else:
-        c.execute("INSERT INTO chats (email, title, messages) VALUES (?, ?, ?)", (email, title, messages_json))
+        c.execute("INSERT INTO chats (email, title, messages) VALUES (%s, %s, %s)", (email, title, messages_json))
     conn.commit()
     conn.close()
 
 def delete_chat_from_db(chat_id):
-    conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
+    conn = get_db_connection()
     c = conn.cursor()
-    c.execute("DELETE FROM chats WHERE id = ?", (chat_id,))
+    c.execute("DELETE FROM chats WHERE id = %s", (chat_id,))
     conn.commit()
     conn.close()
 
@@ -209,6 +230,8 @@ if "current_chat_id" not in st.session_state:
     st.session_state.current_chat_id = None
 if "forgot_password_mode" not in st.session_state:
     st.session_state.forgot_password_mode = False
+if "doc_text" not in st.session_state:
+    st.session_state.doc_text = ""
 
 # Captcha numbers setup
 if "captcha_num1" not in st.session_state:
@@ -341,7 +364,7 @@ groq_api_key = st.secrets.get("GROQ_API_KEY", "")
 
 st.session_state.chats = load_chats(st.session_state.user_email)
 
-# 5. Sidebar-Chat History, Persona Selector & Controls with "GYAN" Logo
+# 5. Sidebar: Chat History, Persona Selector, PDF Upload & Controls
 with st.sidebar:
     st.markdown('<div class="brand-logo">GYAN</div>', unsafe_allow_html=True)
     st.caption(f"Logged in as: **{user_name}**")
@@ -354,6 +377,25 @@ with st.sidebar:
         key="persona_select",
         label_visibility="collapsed"
     )
+
+    st.markdown("---")
+    st.subheader("📄 Upload Document (RAG)")
+    uploaded_file = st.file_uploader("Upload PDF file", type=["pdf"])
+    if uploaded_file is not None:
+        try:
+            reader = PdfReader(uploaded_file)
+            extracted_text = ""
+            for page in reader.pages:
+                extracted_text += page.extract_text() + "\n"
+            st.session_state.doc_text = extracted_text
+            st.success("PDF loaded into context!")
+        except Exception as e:
+            st.error(f"Error reading PDF: {e}")
+
+    if st.session_state.doc_text:
+        if st.button("🗑️ Clear Document"):
+            st.session_state.doc_text = ""
+            st.rerun()
     
     st.markdown("---")
     if st.button("➕ New Chat", use_container_width=True):
@@ -428,6 +470,11 @@ if prompt := st.chat_input("Ask anything or request a structured guide..."):
         st.error("Groq API key is missing! Check your secrets.toml file.")
         st.stop()
 
+    # RAG Context injection
+    final_user_prompt = prompt
+    if st.session_state.doc_text:
+        final_user_prompt = f"Here is reference document text:\n{st.session_state.doc_text[:15000]}\n\nUser Question: {prompt}"
+
     current_chat["messages"].append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -457,8 +504,10 @@ if prompt := st.chat_input("Ask anything or request a structured guide..."):
         try:
             client = Groq(api_key=groq_api_key)
             formatted_messages = [{"role": "system", "content": system_prompts.get(persona, system_prompts["General Companion"])}]
-            for m in current_chat["messages"]:
+            
+            for m in current_chat["messages"][:-1]:
                 formatted_messages.append({"role": m["role"], "content": m["content"]})
+            formatted_messages.append({"role": "user", "content": final_user_prompt})
 
             stream = client.chat.completions.create(
                 model="openai/gpt-oss-20b",

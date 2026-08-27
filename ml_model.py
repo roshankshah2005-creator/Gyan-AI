@@ -3,8 +3,13 @@ from groq import Groq
 import sqlite3
 import json
 import random
-from pypdf import PdfReader
+import os
+import tempfile
 import streamlit.components.v1 as components
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.vectorstores import FAISS
+from langchain_huggingface import HuggingFaceEmbeddings
 
 # 1. Page Configuration 
 st.set_page_config(
@@ -210,8 +215,8 @@ if "current_chat_id" not in st.session_state:
     st.session_state.current_chat_id = None
 if "forgot_password_mode" not in st.session_state:
     st.session_state.forgot_password_mode = False
-if "doc_text" not in st.session_state:
-    st.session_state.doc_text = ""
+if "vector_store" not in st.session_state:
+    st.session_state.vector_store = None
 
 # Captcha numbers setup
 if "captcha_num1" not in st.session_state:
@@ -344,7 +349,7 @@ groq_api_key = st.secrets.get("GROQ_API_KEY", "")
 
 st.session_state.chats = load_chats(st.session_state.user_email)
 
-# 5. Sidebar: Chat History, Persona Selector, PDF Upload & Controls
+# 5. Sidebar: Chat History, Persona Selector, RAG Document Upload & Controls
 with st.sidebar:
     st.markdown('<div class="brand-logo">GYAN</div>', unsafe_allow_html=True)
     st.caption(f"Logged in as: **{user_name}**")
@@ -359,23 +364,23 @@ with st.sidebar:
     )
 
     st.markdown("---")
-    st.subheader("📄 Upload Document (RAG)")
-    uploaded_file = st.file_uploader("Upload PDF file", type=["pdf"])
+    st.subheader("📚 Knowledge Base (RAG)")
+    uploaded_file = st.file_uploader("Upload PDF Document", type=["pdf"])
     if uploaded_file is not None:
-        try:
-            reader = PdfReader(uploaded_file)
-            extracted_text = ""
-            for page in reader.pages:
-                extracted_text += page.extract_text() + "\n"
-            st.session_state.doc_text = extracted_text
-            st.success("PDF loaded into context!")
-        except Exception as e:
-            st.error(f"Error reading PDF: {e}")
-
-    if st.session_state.doc_text:
-        if st.button("🗑️ Clear Document"):
-            st.session_state.doc_text = ""
-            st.rerun()
+        with st.spinner("Processing document embeddings..."):
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+                tmp_file.write(uploaded_file.getvalue())
+                tmp_path = tmp_file.name
+            
+            loader = PyPDFLoader(tmp_path)
+            docs = loader.load()
+            text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+            chunks = text_splitter.split_documents(docs)
+            
+            embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+            st.session_state.vector_store = FAISS.from_documents(chunks, embeddings)
+            os.unlink(tmp_path)
+            st.success("Document embedded successfully!")
     
     st.markdown("---")
     if st.button("➕ New Chat", use_container_width=True):
@@ -450,10 +455,16 @@ if prompt := st.chat_input("Ask anything or request a structured guide..."):
         st.error("Groq API key is missing! Check your secrets.toml file.")
         st.stop()
 
-    # Simple RAG: Inject uploaded document text into the prompt context if available
+    # RAG context retrieval if document is uploaded
+    context_text = ""
+    if st.session_state.vector_store is not None:
+        retriever = st.session_state.vector_store.as_retriever(search_kwargs={"k": 3})
+        relevant_docs = retriever.invoke(prompt)
+        context_text = "\n\n".join([doc.page_content for doc in relevant_docs])
+
     final_user_prompt = prompt
-    if st.session_state.doc_text:
-        final_user_prompt = f"Here is reference document text:\n{st.session_state.doc_text[:15000]}\n\nUser Question: {prompt}"
+    if context_text:
+        final_user_prompt = f"Context from uploaded document:\n{context_text}\n\nUser Question: {prompt}"
 
     current_chat["messages"].append({"role": "user", "content": prompt})
     with st.chat_message("user"):
@@ -485,6 +496,7 @@ if prompt := st.chat_input("Ask anything or request a structured guide..."):
             client = Groq(api_key=groq_api_key)
             formatted_messages = [{"role": "system", "content": system_prompts.get(persona, system_prompts["General Companion"])}]
             
+            # Append chat history excluding the last raw user prompt, replacing it with the RAG-grounded prompt
             for m in current_chat["messages"][:-1]:
                 formatted_messages.append({"role": m["role"], "content": m["content"]})
             formatted_messages.append({"role": "user", "content": final_user_prompt})

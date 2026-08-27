@@ -1,6 +1,4 @@
 import streamlit as st
-from groq import Groq
-# pypdf, supabase, and streamlit-cookies-controller are ready for your advanced features here
 
 # 1. Page Configuration
 st.set_page_config(
@@ -9,6 +7,13 @@ st.set_page_config(
     layout="centered",
     initial_sidebar_state="expanded"
 )
+
+# Safe import for Groq
+try:
+    from groq import Groq
+except ImportError:
+    st.error("The 'groq' package is missing. Please run: `pip install groq`")
+    st.stop()
 
 # 2. Initialize Session State
 if "user" not in st.session_state:
@@ -43,8 +48,11 @@ if not st.session_state.user:
                 st.error("Please fill in both fields.")
     st.stop()
 
-# Get API key from Streamlit Secrets
-groq_api_key = st.secrets.get("GROQ_API_KEY", "")
+# Safe Secret Retrieval
+try:
+    groq_api_key = st.secrets.get("GROQ_API_KEY", "")
+except Exception:
+    groq_api_key = ""
 
 # 4. Sidebar: Chat History & Controls
 with st.sidebar:
@@ -124,7 +132,7 @@ for message in current_chat["messages"]:
 
 if prompt := st.chat_input("Ask anything or request a structured guide..."):
     if not groq_api_key:
-        st.error("Groq API key is missing! Check your secrets.toml file.")
+        st.error("Groq API key is missing! Please check your `.streamlit/secrets.toml` file.")
         st.stop()
 
     current_chat["messages"].append({"role": "user", "content": prompt})
@@ -139,7 +147,6 @@ if prompt := st.chat_input("Ask anything or request a structured guide..."):
         message_placeholder.markdown("Thinking...")
         
         try:
-            # Using the official Groq Python SDK matching your requirements.txt
             client = Groq(api_key=groq_api_key)
             
             formatted_messages = [{"role": "system", "content": system_prompts.get(persona, system_prompts["General Companion"])}]

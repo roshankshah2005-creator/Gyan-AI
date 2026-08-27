@@ -5,7 +5,7 @@ import json
 import random
 import streamlit.components.v1 as components
 
-# 1. Page Configuration & Custom CSS to Hide GitHub/Streamlit Header Icons
+# 1. Page Configuration & Custom CSS (Including Custom Logo Font)
 st.set_page_config(
     page_title="Gyan AI - Intelligent Companion",
     page_icon="🤖",
@@ -15,6 +15,21 @@ st.set_page_config(
 
 st.markdown("""
     <style>
+        /* Import a sleek modern tech font for the logo */
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap');
+
+        /* Custom Gradient Logo Styling */
+        .brand-logo {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 26px;
+            font-weight: 700;
+            background: linear-gradient(45deg, #3b82f6, #10b981);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+
         /* Hide Streamlit top header, menu, and GitHub share button */
         #MainMenu {visibility: hidden;}
         header {visibility: hidden;}
@@ -187,7 +202,6 @@ if "current_chat_id" not in st.session_state:
 if "forgot_password_mode" not in st.session_state:
     st.session_state.forgot_password_mode = False
 
-# Initialize math captcha numbers if not present
 if "captcha_num1" not in st.session_state:
     st.session_state.captcha_num1 = random.randint(1, 10)
     st.session_state.captcha_num2 = random.randint(1, 10)
@@ -196,7 +210,6 @@ if "captcha_num1" not in st.session_state:
 if not st.session_state.user_email:
     st.title("Welcome to Gyan AI")
     
-    # Handle Forgot Password View
     if st.session_state.forgot_password_mode:
         st.subheader("Reset Password")
         with st.form("forgot_password_form"):
@@ -223,7 +236,6 @@ if not st.session_state.user_email:
                 st.rerun()
         st.stop()
 
-    # Normal Auth Mode (Log In / Sign Up)
     auth_mode = st.radio("Choose Action", ["Log In", "Sign Up"], horizontal=True)
     
     if auth_mode == "Log In":
@@ -261,7 +273,6 @@ if not st.session_state.user_email:
             email_input = st.text_input("Email Address")
             password_input = st.text_input("Password", type="password")
             
-            # Bot Verification Math CAPTCHA
             n1 = st.session_state.captcha_num1
             n2 = st.session_state.captcha_num2
             captcha_input = st.text_input(f"Human Verification: What is {n1} + {n2}?")
@@ -282,7 +293,6 @@ if not st.session_state.user_email:
                     st.error("Please fill in all fields correctly.")
                 elif user_answer != (n1 + n2):
                     st.error("Incorrect verification answer! Please try again.")
-                    # Refresh captcha numbers on failure
                     st.session_state.captcha_num1 = random.randint(1, 10)
                     st.session_state.captcha_num2 = random.randint(1, 10)
                 else:
@@ -304,9 +314,9 @@ groq_api_key = st.secrets.get("GROQ_API_KEY", "")
 
 st.session_state.chats = load_chats(st.session_state.user_email)
 
-# 5. Sidebar: Chat History, Persona Selector & Controls
+# 5. Sidebar: Chat History, Persona Selector & Controls with Custom Font Logo
 with st.sidebar:
-    st.title("Gyan AI")
+    st.markdown('<div class="brand-logo">GYAN AI</div>', unsafe_allow_html=True)
     st.caption(f"Logged in as: **{user_name}**")
     
     st.markdown("---")

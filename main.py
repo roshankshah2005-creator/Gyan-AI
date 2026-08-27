@@ -154,7 +154,7 @@ if prompt := st.chat_input("Ask anything or request a structured guide..."):
                 formatted_messages.append({"role": m["role"], "content": m["content"]})
 
             response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+                model="llama-3.1-8b-instant",
                 messages=formatted_messages,
                 temperature=0.6,
                 max_tokens=1500

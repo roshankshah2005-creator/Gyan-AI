@@ -4,3 +4,4 @@ pypdf
 streamlit-cookies-controller
 python-dotenv
 psycopg2-binary
+scikit-learn

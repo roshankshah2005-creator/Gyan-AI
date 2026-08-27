@@ -8,7 +8,7 @@ import streamlit.components.v1 as components
 # 1. Page Configuration & Custom CSS (Including Custom Logo Font)
 st.set_page_config(
     page_title="Gyan AI - Intelligent Companion",
-    page_icon="🤖",
+    page_icon="🔮",
     layout="centered",
     initial_sidebar_state="expanded"
 )

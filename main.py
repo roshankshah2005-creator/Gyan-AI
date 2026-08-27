@@ -291,9 +291,9 @@ with st.sidebar:
             c = conn.cursor()
             c.execute("INSERT INTO chats (email, title, messages) VALUES (?, ?, ?)", (st.session_state.user_email, "New Conversation", json.dumps([])))
             conn.commit()
-            new_chat_id = c.lastrowid
+            fallback_id = c.lastrowid
             conn.close()
-            st.session_state.current_chat_id = new_id
+            st.session_state.current_chat_id = fallback_id
         else:
             st.session_state.current_chat_id = refreshed_chats[0]["id"]
         

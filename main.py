@@ -130,6 +130,15 @@ def load_chats(email):
         })
     return chats
 
+def create_new_chat(email):
+    conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
+    c = conn.cursor()
+    c.execute("INSERT INTO chats (email, title, messages) VALUES (?, ?, ?)", (email, "New Conversation", json.dumps([])))
+    conn.commit()
+    chat_id = c.lastrowid
+    conn.close()
+    return chat_id
+
 def save_chat_to_db(email, chat_id, title, messages):
     conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
     c = conn.cursor()
@@ -189,13 +198,8 @@ if not st.session_state.user_email:
                     
                     user_chats = load_chats(email)
                     if not user_chats:
-                        conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
-                        c = conn.cursor()
-                        c.execute("INSERT INTO chats (email, title, messages) VALUES (?, ?, ?)", (email, "New Conversation", json.dumps([])))
-                        conn.commit()
-                        new_chat_id = c.lastrowid
-                        conn.close()
-                        user_chats = [{"id": new_id, "title": "New Conversation", "messages": []}]
+                        fallback_id = create_new_chat(email)
+                        user_chats = load_chats(email)
                     
                     st.session_state.chats = user_chats
                     st.session_state.current_chat_id = user_chats[0]["id"]
@@ -219,15 +223,9 @@ if not st.session_state.user_email:
                         st.session_state.user_email = email
                         st.query_params["email"] = email
                         
-                        conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
-                        c = conn.cursor()
-                        c.execute("INSERT INTO chats (email, title, messages) VALUES (?, ?, ?)", (email, "New Conversation", json.dumps([])))
-                        conn.commit()
-                        new_chat_id = c.lastrowid
-                        conn.close()
-                        
-                        st.session_state.chats = [{"id": new_id, "title": "New Conversation", "messages": []}]
-                        st.session_state.current_chat_id = new_id
+                        new_chat_id = create_new_chat(email)
+                        st.session_state.chats = load_chats(email)
+                        st.session_state.current_chat_id = new_chat_id
                         st.rerun()
                     else:
                         st.error("Email is already registered! Please switch to Log In.")
@@ -256,13 +254,7 @@ with st.sidebar:
     
     st.markdown("---")
     if st.button("➕ New Chat", use_container_width=True):
-        conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
-        c = conn.cursor()
-        c.execute("INSERT INTO chats (email, title, messages) VALUES (?, ?, ?)", (st.session_state.user_email, "New Conversation", json.dumps([])))
-        conn.commit()
-        new_id = c.lastrowid
-        conn.close()
-        
+        new_id = create_new_chat(st.session_state.user_email)
         st.session_state.current_chat_id = new_id
         st.rerun()
 
@@ -287,12 +279,7 @@ with st.sidebar:
         
         refreshed_chats = load_chats(st.session_state.user_email)
         if not refreshed_chats:
-            conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
-            c = conn.cursor()
-            c.execute("INSERT INTO chats (email, title, messages) VALUES (?, ?, ?)", (st.session_state.user_email, "New Conversation", json.dumps([])))
-            conn.commit()
-            fallback_id = c.lastrowid
-            conn.close()
+            fallback_id = create_new_chat(st.session_state.user_email)
             st.session_state.current_chat_id = fallback_id
         else:
             st.session_state.current_chat_id = refreshed_chats[0]["id"]

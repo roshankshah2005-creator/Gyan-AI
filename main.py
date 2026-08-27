@@ -224,7 +224,7 @@ def extract_text_from_file(uploaded_file):
             st.error(f"Error reading text file: {e}")
     return text
 
-def chunk_text(text, chunk_size=500, overlap=50):
+def chunk_text(text, chunk_size=400, overlap=50):
     words = text.split()
     chunks = []
     for i in range(0, len(words), chunk_size - overlap):
@@ -233,7 +233,7 @@ def chunk_text(text, chunk_size=500, overlap=50):
             chunks.append(chunk)
     return chunks
 
-def retrieve_relevant_chunks(query, documents, top_k=4):
+def retrieve_relevant_chunks(query, documents, top_k=5):
     all_chunks = []
     for doc in documents:
         all_chunks.extend(doc.get("chunks", []))
@@ -249,10 +249,12 @@ def retrieve_relevant_chunks(query, documents, top_k=4):
         similarities = cosine_similarity(query_vector, chunk_vectors).flatten()
         top_indices = similarities.argsort()[::-1][:top_k]
         
-        relevant_text = "\n\n---\n\n".join([all_chunks[idx] for idx in top_indices if similarities[idx] > 0.03])
+        # Pull top relevant chunks reliably without arbitrary dropping
+        relevant_text = "\n\n---\n\n".join([all_chunks[idx] for idx in top_indices])
         return relevant_text
     except Exception:
-        return ""
+        # Fallback to returning the first few chunks if vectorizer fails
+        return "\n\n---\n\n".join(all_chunks[:top_k])
 
 # 3. Session State & URL Parameter Auto-Login
 if "user_email" not in st.session_state:
@@ -435,15 +437,17 @@ with st.sidebar:
         if not already_exists:
             with st.spinner("Processing & chunking document..."):
                 raw_text = extract_text_from_file(uploaded_file)
-                if raw_text:
+                if raw_text and len(raw_text.strip()) > 0:
                     chunks = chunk_text(raw_text)
                     current_chat["documents"].append({
                         "filename": uploaded_file.name,
                         "chunks": chunks
                     })
                     save_chat_to_db(st.session_state.user_email, current_chat["id"], current_chat["title"], current_chat["messages"], current_chat["documents"])
-                    st.success(f"Added {uploaded_file.name} to context!")
+                    st.success(f"Added {uploaded_file.name} ({len(raw_text)} chars)! Ready.")
                     st.rerun()
+                else:
+                    st.error("Could not extract text. Make sure your PDF has selectable text.")
 
     if current_chat and current_chat["documents"]:
         st.caption("Active Context Documents:")
@@ -560,10 +564,10 @@ if prompt := st.chat_input("Ask anything or query your uploaded documents..."):
             
             rag_context = ""
             if current_chat.get("documents"):
-                rag_context = retrieve_relevant_chunks(prompt, current_chat["documents"], top_k=4)
+                rag_context = retrieve_relevant_chunks(prompt, current_chat["documents"], top_k=6)
             
             if rag_context:
-                final_system_content = f"{base_system_prompt}\n\nUse the following extracted document context to answer the user's question accurately and thoroughly:\n{rag_context}"
+                final_system_content = f"{base_system_prompt}\n\n[CONTEXT KNOWLEDGE BASE]\nUse the following extracted document text to answer the user's question accurately and thoroughly:\n{rag_context}"
             else:
                 final_system_content = base_system_prompt
 
@@ -571,7 +575,6 @@ if prompt := st.chat_input("Ask anything or query your uploaded documents..."):
             for m in current_chat["messages"]:
                 formatted_messages.append({"role": m["role"], "content": m["content"]})
 
-            # Using supported Groq model 'openai/gpt-oss-20b'
             stream = client.chat.completions.create(
                 model="openai/gpt-oss-20b",
                 messages=formatted_messages,

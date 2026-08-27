@@ -5,10 +5,10 @@ import json
 import random
 import streamlit.components.v1 as components
 
-# 1. Page Configuration & Custom CSS (Including Custom Logo Font)
+# 1. Page Configuration & Custom CSS (Fully responsive for mobile & laptop)
 st.set_page_config(
-    page_title="Gyan AI - Intelligent Companion",
-    page_icon="🔮",
+    page_title="GYAN - Intelligent Companion",
+    page_icon="🧠",
     layout="centered",
     initial_sidebar_state="expanded"
 )
@@ -30,11 +30,16 @@ st.markdown("""
             margin-bottom: 5px;
         }
 
-        /* Hide Streamlit top header, menu, and GitHub share button */
+        /* Hide Streamlit menu and GitHub share button, keeping the header safe for mobile toggle */
         #MainMenu {visibility: hidden;}
-        header {visibility: hidden;}
         footer {visibility: hidden;}
         .stDeployButton {display:none;}
+        
+        /* Ensure mobile sidebar toggle button is always clearly visible */
+        [data-testid="collapsedControl"] {
+            display: block !important;
+            color: #3b82f6 !important;
+        }
         
         /* Distinct styling for User Questions */
         div.stChatMessage[data-testid="stChatMessage-user"] {
@@ -75,7 +80,6 @@ def init_db():
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS users (email TEXT PRIMARY KEY, name TEXT)''')
     
-    # Safely check if password column exists, add it if missing
     c.execute("PRAGMA table_info(users)")
     columns = [col[1] for col in c.fetchall()]
     if "password" not in columns:
@@ -213,7 +217,7 @@ if "reset_captcha_num1" not in st.session_state:
 
 # 4. Authentication & Forgot Password Screen
 if not st.session_state.user_email:
-    st.title("Welcome to Gyan AI")
+    st.title("Welcome to GYAN")
     
     if st.session_state.forgot_password_mode:
         st.subheader("Reset Password & Verify Identity")

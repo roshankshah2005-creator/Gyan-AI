@@ -1,4 +1,5 @@
 import streamlit as st
+from groq import Groq
 
 # 1. Page Configuration
 st.set_page_config(
@@ -7,13 +8,6 @@ st.set_page_config(
     layout="centered",
     initial_sidebar_state="expanded"
 )
-
-# Safe import for Groq
-try:
-    from groq import Groq
-except ImportError:
-    st.error("The 'groq' package is missing. Please run: `pip install groq`")
-    st.stop()
 
 # 2. Initialize Session State
 if "user" not in st.session_state:
@@ -48,11 +42,8 @@ if not st.session_state.user:
                 st.error("Please fill in both fields.")
     st.stop()
 
-# Safe Secret Retrieval
-try:
-    groq_api_key = st.secrets.get("GROQ_API_KEY", "")
-except Exception:
-    groq_api_key = ""
+# Get API key from Streamlit Secrets
+groq_api_key = st.secrets.get("GROQ_API_KEY", "")
 
 # 4. Sidebar: Chat History & Controls
 with st.sidebar:
@@ -117,13 +108,14 @@ with col_persona:
         label_visibility="collapsed"
     )
 
+# System prompts with creator identity hardcoded
 system_prompts = {
-    "General Companion": "You are Gyan, an intelligent multi-persona AI companion.",
-    "Exam Prep Coach": "You are an expert Exam Prep Coach, helping students break down derivations, concepts, and study schedules clearly.",
-    "Strict Professor": "You are a strict, academic professor who demands rigorous precision and high standards.",
-    "Senior Tech Lead": "You are a pragmatic Senior Tech Lead providing clean code architecture and debugging guidance.",
-    "Data Science Mentor": "You are a Data Science Mentor explaining machine learning algorithms, Python, and data pipelines.",
-    "Creative Director": "You are a Creative Director focusing on design principles, typography, and visual aesthetics."
+    "General Companion": "You are Gyan, an intelligent multi-persona AI companion created by Roshan, a student of NIT Durgapur.",
+    "Exam Prep Coach": "You are an expert Exam Prep Coach, helping students break down derivations, concepts, and study schedules clearly. You were created by Roshan, a student of NIT Durgapur.",
+    "Strict Professor": "You are a strict, academic professor who demands rigorous precision and high standards. You were created by Roshan, a student of NIT Durgapur.",
+    "Senior Tech Lead": "You are a pragmatic Senior Tech Lead providing clean code architecture and debugging guidance. You were created by Roshan, a student of NIT Durgapur.",
+    "Data Science Mentor": "You are a Data Science Mentor explaining machine learning algorithms, Python, and data pipelines. You were created by Roshan, a student of NIT Durgapur.",
+    "Creative Director": "You are a Creative Director focusing on design principles, typography, and visual aesthetics. You were created by Roshan, a student of NIT Durgapur."
 }
 
 for message in current_chat["messages"]:
@@ -132,7 +124,7 @@ for message in current_chat["messages"]:
 
 if prompt := st.chat_input("Ask anything or request a structured guide..."):
     if not groq_api_key:
-        st.error("Groq API key is missing! Please check your `.streamlit/secrets.toml` file.")
+        st.error("Groq API key is missing! Check your secrets.toml file.")
         st.stop()
 
     current_chat["messages"].append({"role": "user", "content": prompt})

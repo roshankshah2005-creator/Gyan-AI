@@ -101,7 +101,6 @@ def init_db():
                     documents TEXT
                 )''')
     
-    # Check if documents column exists in older database versions
     c.execute("PRAGMA table_info(chats)")
     chat_columns = [col[1] for col in c.fetchall()]
     if "documents" not in chat_columns:
@@ -234,7 +233,7 @@ def chunk_text(text, chunk_size=500, overlap=50):
             chunks.append(chunk)
     return chunks
 
-def retrieve_relevant_chunks(query, documents, top_k=3):
+def retrieve_relevant_chunks(query, documents, top_k=4):
     all_chunks = []
     for doc in documents:
         all_chunks.extend(doc.get("chunks", []))
@@ -250,7 +249,7 @@ def retrieve_relevant_chunks(query, documents, top_k=3):
         similarities = cosine_similarity(query_vector, chunk_vectors).flatten()
         top_indices = similarities.argsort()[::-1][:top_k]
         
-        relevant_text = "\n\n---\n\n".join([all_chunks[idx] for idx in top_indices if similarities[idx] > 0.05])
+        relevant_text = "\n\n---\n\n".join([all_chunks[idx] for idx in top_indices if similarities[idx] > 0.03])
         return relevant_text
     except Exception:
         return ""
@@ -432,7 +431,6 @@ with st.sidebar:
     current_chat = next((c for c in st.session_state.chats if c["id"] == st.session_state.current_chat_id), None)
     
     if uploaded_file and current_chat:
-        # Check if already uploaded in this chat to avoid duplicate processing loops
         already_exists = any(d["filename"] == uploaded_file.name for d in current_chat["documents"])
         if not already_exists:
             with st.spinner("Processing & chunking document..."):
@@ -507,7 +505,6 @@ if not current_chat and st.session_state.chats:
     current_chat = st.session_state.chats[0]
     st.session_state.current_chat_id = current_chat["id"]
 
-# Display centered greeting only if messages list is empty; disappears on first prompt
 if current_chat and len(current_chat["messages"]) == 0:
     st.markdown(f"<h1 style='text-align: center; margin-top: 20vh;'>How can I help you, {user_name}!!</h1>", unsafe_allow_html=True)
 
@@ -541,12 +538,12 @@ if prompt := st.chat_input("Ask anything or query your uploaded documents..."):
         try:
             client_temp = Groq(api_key=groq_api_key)
             title_res = client_temp.chat.completions.create(
-                model="openai/gpt-oss-20b",
+                model="llama-3.3-70b-versatile",
                 messages=[
                     {"role": "system", "content": "Generate a short title (max 4 words) summarizing this query. No quotes, no punctuation."},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=8
+                max_tokens=15
             )
             gen_title = title_res.choices[0].message.content.strip()
             current_chat["title"] = gen_title if gen_title else (prompt[:25] + "...")
@@ -561,13 +558,12 @@ if prompt := st.chat_input("Ask anything or query your uploaded documents..."):
             client = Groq(api_key=groq_api_key)
             base_system_prompt = system_prompts.get(persona, system_prompts["General Companion"])
             
-            # Retrieve relevant context if documents are uploaded
             rag_context = ""
             if current_chat.get("documents"):
-                rag_context = retrieve_relevant_chunks(prompt, current_chat["documents"], top_k=3)
+                rag_context = retrieve_relevant_chunks(prompt, current_chat["documents"], top_k=4)
             
             if rag_context:
-                final_system_content = f"{base_system_prompt}\n\nUse the following extracted document context to answer the user's question accurately if relevant:\n{rag_context}"
+                final_system_content = f"{base_system_prompt}\n\nUse the following extracted document context to answer the user's question accurately and thoroughly:\n{rag_context}"
             else:
                 final_system_content = base_system_prompt
 
@@ -575,16 +571,17 @@ if prompt := st.chat_input("Ask anything or query your uploaded documents..."):
             for m in current_chat["messages"]:
                 formatted_messages.append({"role": m["role"], "content": m["content"]})
 
+            # Increased max_tokens and using llama-3.3-70b-versatile for stability and depth
             stream = client.chat.completions.create(
-                model="openai/gpt-oss-20b",
+                model="llama-3.3-70b-versatile",
                 messages=formatted_messages,
-                temperature=0.6,
-                max_tokens=1024,
+                temperature=0.5,
+                max_tokens=2048,
                 stream=True
             )
             
             for chunk in stream:
-                if chunk.choices[0].delta.content is not None:
+                if chunk.choices and chunk.choices[0].delta.content is not None:
                     full_response += chunk.choices[0].delta.content
                     display_text = full_response.lstrip(" .<br>•\n")
                     message_placeholder.markdown(display_text + "▌")

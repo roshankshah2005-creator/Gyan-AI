@@ -3,7 +3,6 @@ from groq import Groq
 import sqlite3
 import json
 import random
-import hashlib
 from pypdf import PdfReader
 import streamlit.components.v1 as components
 
@@ -80,15 +79,11 @@ def scroll_to_bottom():
     """
     components.html(js, height=0, width=0)
 
-# Security Helper: Hash Passwords
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
-
 # 2. Initialize SQLite Database
 def init_db():
     conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS users (email TEXT PRIMARY KEY, name TEXT, password TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS users (email TEXT PRIMARY KEY, name TEXT)''')
     
     c.execute("PRAGMA table_info(users)")
     columns = [col[1] for col in c.fetchall()]
@@ -129,9 +124,7 @@ def register_user(email, name, password):
     if c.fetchone():
         conn.close()
         return False
-    
-    hashed_pass = hash_password(password)
-    c.execute("INSERT INTO users (email, name, password) VALUES (?, ?, ?)", (email, name, hashed_pass))
+    c.execute("INSERT INTO users (email, name, password) VALUES (?, ?, ?)", (email, name, password))
     conn.commit()
     conn.close()
     return True
@@ -142,15 +135,14 @@ def verify_user(email, password):
     c.execute("SELECT name, password FROM users WHERE email = ?", (email,))
     row = c.fetchone()
     conn.close()
-    if row and row[1] == hash_password(password):
+    if row and row[1] == password:
         return row[0]
     return None
 
 def update_password(email, new_password):
     conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
     c = conn.cursor()
-    hashed_pass = hash_password(new_password)
-    c.execute("UPDATE users SET password = ? WHERE email = ?", (hashed_pass, email))
+    c.execute("UPDATE users SET password = ? WHERE email = ?", (new_password, email))
     conn.commit()
     conn.close()
 
@@ -458,7 +450,7 @@ if prompt := st.chat_input("Ask anything or request a structured guide..."):
         st.error("Groq API key is missing! Check your secrets.toml file.")
         st.stop()
 
-    # Simple RAG injection
+    # Simple RAG: Inject uploaded document text into the prompt context if available
     final_user_prompt = prompt
     if st.session_state.doc_text:
         final_user_prompt = f"Here is reference document text:\n{st.session_state.doc_text[:15000]}\n\nUser Question: {prompt}"

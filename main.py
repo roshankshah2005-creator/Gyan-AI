@@ -4,7 +4,7 @@ import sqlite3
 import json
 import streamlit.components.v1 as components
 
-# 1. Page Configuration & Custom CSS for Distinct Question/Answer Bubbles
+# 1. Page Configuration & Custom CSS to Hide GitHub/Streamlit Header Icons
 st.set_page_config(
     page_title="Gyan AI - Intelligent Companion",
     page_icon="🤖",
@@ -14,6 +14,12 @@ st.set_page_config(
 
 st.markdown("""
     <style>
+        /* Hide Streamlit top header, menu, and GitHub share button */
+        #MainMenu {visibility: hidden;}
+        header {visibility: hidden;}
+        footer {visibility: hidden;}
+        .stDeployButton {display:none;}
+        
         /* Distinct styling for User Questions */
         div.stChatMessage[data-testid="stChatMessage-user"] {
             background-color: #1e293b !important;
@@ -261,7 +267,6 @@ if current_chat:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-# Native Streamlit chat input locked at the bottom of the screen
 if prompt := st.chat_input("Ask anything or request a structured guide..."):
     if not groq_api_key:
         st.error("Groq API key is missing! Check your secrets.toml file.")
@@ -289,7 +294,6 @@ if prompt := st.chat_input("Ask anything or request a structured guide..."):
         except Exception:
             current_chat["title"] = prompt[:25] + "..." if len(prompt) > 25 else prompt
 
-    # Real-time streaming generation
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
         full_response = ""

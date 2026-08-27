@@ -89,7 +89,6 @@ def register_user(email, name, password):
     conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
     c = conn.cursor()
     
-    # Failsafe check right inside registration to ensure schema is fully updated
     c.execute("PRAGMA table_info(users)")
     columns = [col[1] for col in c.fetchall()]
     if "password" not in columns:
@@ -100,7 +99,6 @@ def register_user(email, name, password):
     if c.fetchone():
         conn.close()
         return False
-    
     c.execute("INSERT INTO users (email, name, password) VALUES (?, ?, ?)", (email, name, password))
     conn.commit()
     conn.close()
@@ -286,17 +284,20 @@ with st.sidebar:
     if chats_to_delete:
         for cid in chats_to_delete:
             delete_chat_from_db(cid)
+        
         refreshed_chats = load_chats(st.session_state.user_email)
         if not refreshed_chats:
             conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
             c = conn.cursor()
             c.execute("INSERT INTO chats (email, title, messages) VALUES (?, ?, ?)", (st.session_state.user_email, "New Conversation", json.dumps([])))
             conn.commit()
-            new_id = c.lastrowid
+            new_chat_id = c.lastrowid
             conn.close()
             st.session_state.current_chat_id = new_id
         else:
             st.session_state.current_chat_id = refreshed_chats[0]["id"]
+        
+        st.session_state.chats = load_chats(st.session_state.user_email)
         st.rerun()
 
     st.markdown("---")

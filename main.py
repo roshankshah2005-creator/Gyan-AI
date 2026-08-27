@@ -170,7 +170,7 @@ def load_chats(email):
             try:
                 parsed = json.loads(row[3])
                 if isinstance(parsed, list) and len(parsed) > 0:
-                    doc_data = parsed[-1] # Backward compatibility: take the last if it was a list
+                    doc_data = parsed[-1]
                 elif isinstance(parsed, dict):
                     doc_data = parsed
             except:
@@ -432,15 +432,15 @@ with st.sidebar:
         st.session_state.current_chat_id = new_id
         st.rerun()
 
-    # Single Document Uploader Section
+    # Document Section wrapped in form with clear_on_submit to instantly clear widget box after click
     st.subheader("📚 Knowledge Base Document")
-    uploaded_file = st.file_uploader("Upload single PDF or TXT", type=["pdf", "txt"], key="rag_uploader")
-    
     current_chat = next((c for c in st.session_state.chats if c["id"] == st.session_state.current_chat_id), None)
     
-    if uploaded_file and current_chat:
-        current_doc = current_chat.get("document")
-        if not current_doc or current_doc.get("filename") != uploaded_file.name:
+    with st.form("upload_form", clear_on_submit=True):
+        uploaded_file = st.file_uploader("Upload single PDF or TXT", type=["pdf", "txt"])
+        submit_upload = st.form_submit_button("Upload Document")
+        
+        if submit_upload and uploaded_file and current_chat:
             with st.spinner("Processing & chunking document..."):
                 raw_text = extract_text_from_file(uploaded_file)
                 if raw_text and len(raw_text.strip()) > 0:
@@ -450,7 +450,7 @@ with st.sidebar:
                         "chunks": chunks
                     }
                     save_chat_to_db(st.session_state.user_email, current_chat["id"], current_chat["title"], current_chat["messages"], current_chat["document"])
-                    st.success(f"Loaded {uploaded_file.name}!")
+                    st.success(f"Loaded {uploaded_file.name} successfully!")
                     st.rerun()
                 else:
                     st.error("Could not extract text. Make sure your PDF has selectable text.")

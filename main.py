@@ -2,14 +2,51 @@ import streamlit as st
 from groq import Groq
 import sqlite3
 import json
+import threading
+import streamlit.components.v1 as components
 
-# 1. Page Configuration
+# 1. Page Configuration & Custom CSS for Distinct Question/Answer Bubbles
 st.set_page_config(
     page_title="Gyan AI - Intelligent Companion",
     page_icon="🤖",
     layout="centered",
     initial_sidebar_state="expanded"
 )
+
+st.markdown("""
+    <style>
+        /* Distinct styling for User Questions */
+        div.stChatMessage[data-testid="stChatMessage-user"] {
+            background-color: #e8f4fd !important;
+            border-left: 5px solid #1976d2 !important;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        /* Distinct styling for AI Answers */
+        div.stChatMessage[data-testid="stChatMessage-assistant"] {
+            background-color: #f4f6f8 !important;
+            border-left: 5px solid #2e7d32 !important;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+# Function to auto-scroll
+def scroll_to_bottom():
+    js = """
+    <script>
+        setTimeout(function() {
+            const mainContainer = window.parent.document.querySelector('.main');
+            if (mainContainer) {
+                mainContainer.scrollTop = mainContainer.scrollHeight;
+            }
+        }, 100);
+    </script>
+    """
+    components.html(js, height=0, width=0)
 
 # 2. Initialize SQLite Database
 def init_db():
@@ -80,6 +117,37 @@ def delete_chat_from_db(chat_id):
     conn.commit()
     conn.close()
 
+# Background thread worker to handle AI responses so users can switch chats freely
+def generate_background_response(chat_id, email, messages_snapshot, persona, api_key, system_prompts):
+    try:
+        client = Groq(api_key=api_key)
+        formatted_messages = [{"role": "system", "content": system_prompts.get(persona, system_prompts["General Companion"])}]
+        for m in messages_snapshot:
+            formatted_messages.append({"role": m["role"], "content": m["content"]})
+
+        response = client.chat.completions.create(
+            model="openai/gpt-oss-20b",
+            messages=formatted_messages,
+            temperature=0.6,
+            max_tokens=1500
+        )
+        reply = response.choices[0].message.content
+        
+        # Fetch current messages from DB to avoid race conditions, append reply, and save
+        conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
+        c = conn.cursor()
+        c.execute("SELECT title, messages FROM chats WHERE id = ?", (chat_id,))
+        row = c.fetchone()
+        if row:
+            current_title = row[0]
+            current_msgs = json.loads(row[1])
+            current_msgs.append({"role": "assistant", "content": reply})
+            c.execute("UPDATE chats SET messages = ? WHERE id = ?", (json.dumps(current_msgs), chat_id))
+            conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Background execution error: {e}")
+
 # 3. Session State & URL Parameter Auto-Login
 if "user_email" not in st.session_state:
     url_email = st.query_params.get("email", None)
@@ -113,11 +181,8 @@ if not st.session_state.user_email:
             if name and email:
                 save_user(email, name)
                 st.session_state.user_email = email
-                
-                # Save email in URL parameters so refreshing keeps you logged in
                 st.query_params["email"] = email
                 
-                # Load user's chats from SQLite
                 user_chats = load_chats(email)
                 if not user_chats:
                     conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
@@ -135,11 +200,11 @@ if not st.session_state.user_email:
                 st.error("Please fill in both fields correctly.")
     st.stop()
 
-# Retrieve user name from database
 user_name = get_user(st.session_state.user_email)
-
-# Get API key from Streamlit Secrets
 groq_api_key = st.secrets.get("GROQ_API_KEY", "")
+
+# Sync session state chats with database on every run so background updates appear immediately
+st.session_state.chats = load_chats(st.session_state.user_email)
 
 # 5. Sidebar: Chat History & Controls
 with st.sidebar:
@@ -154,11 +219,6 @@ with st.sidebar:
         new_id = c.lastrowid
         conn.close()
         
-        st.session_state.chats.insert(0, {
-            "id": new_id,
-            "title": "New Conversation",
-            "messages": []
-        })
         st.session_state.current_chat_id = new_id
         st.rerun()
 
@@ -181,18 +241,17 @@ with st.sidebar:
     if chats_to_delete:
         for cid in chats_to_delete:
             delete_chat_from_db(cid)
-        st.session_state.chats = [c for c in st.session_state.chats if c["id"] not in chats_to_delete]
-        if not st.session_state.chats:
+        refreshed_chats = load_chats(st.session_state.user_email)
+        if not refreshed_chats:
             conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
             c = conn.cursor()
             c.execute("INSERT INTO chats (email, title, messages) VALUES (?, ?, ?)", (st.session_state.user_email, "New Conversation", json.dumps([])))
             conn.commit()
             new_id = c.lastrowid
             conn.close()
-            st.session_state.chats = [{"id": new_id, "title": "New Conversation", "messages": []}]
             st.session_state.current_chat_id = new_id
         else:
-            st.session_state.current_chat_id = st.session_state.chats[0]["id"]
+            st.session_state.current_chat_id = refreshed_chats[0]["id"]
         st.rerun()
 
     st.markdown("---")
@@ -211,7 +270,7 @@ if not current_chat and st.session_state.chats:
 
 col_title, col_persona = st.columns([2, 2])
 with col_title:
-    st.header(current_chat["title"])
+    st.header(current_chat["title"] if current_chat else "New Conversation")
 with col_persona:
     persona = st.selectbox(
         "Persona",
@@ -219,7 +278,6 @@ with col_persona:
         label_visibility="collapsed"
     )
 
-# System prompts with creator identity hardcoded & Code Helper added
 system_prompts = {
     "General Companion": "You are Gyan, an intelligent multi-persona AI companion created by Roshan, a student of NIT Durgapur.",
     "Exam Prep Coach": "You are an expert Exam Prep Coach, helping students break down derivations, concepts, and study schedules clearly. You were created by Roshan, a student of NIT Durgapur.",
@@ -230,20 +288,24 @@ system_prompts = {
     "Code Helper": "You are an expert Code Helper and debugging assistant, providing clean, well-commented code snippets and solutions. You were created by Roshan, a student of NIT Durgapur."
 }
 
-for message in current_chat["messages"]:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+if current_chat:
+    for message in current_chat["messages"]:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
 if prompt := st.chat_input("Ask anything or request a structured guide..."):
     if not groq_api_key:
         st.error("Groq API key is missing! Check your secrets.toml file.")
         st.stop()
 
+    # Append user message
     current_chat["messages"].append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Automatically generate a smart title for the chat history
+    scroll_to_bottom()
+
+    # Generate smart title if new
     if current_chat["title"] == "New Conversation":
         try:
             client_temp = Groq(api_key=groq_api_key)
@@ -260,33 +322,14 @@ if prompt := st.chat_input("Ask anything or request a structured guide..."):
         except Exception:
             current_chat["title"] = prompt[:25] + "..." if len(prompt) > 25 else prompt
 
-    with st.chat_message("assistant"):
-        message_placeholder = st.empty()
-        message_placeholder.markdown("Thinking...")
-        
-        try:
-            client = Groq(api_key=groq_api_key)
-            
-            formatted_messages = [{"role": "system", "content": system_prompts.get(persona, system_prompts["General Companion"])}]
-            for m in current_chat["messages"]:
-                formatted_messages.append({"role": m["role"], "content": m["content"]})
+    # Save initial user message + new title to DB immediately
+    save_chat_to_db(st.session_state.user_email, current_chat["id"], current_chat["title"], current_chat["messages"])
 
-            response = client.chat.completions.create(
-                model="openai/gpt-oss-20b",
-                messages=formatted_messages,
-                temperature=0.6,
-                max_tokens=1500
-            )
-            
-            reply = response.choices[0].message.content
-            message_placeholder.markdown(reply)
-            current_chat["messages"].append({"role": "assistant", "content": reply})
-            
-            # Save to SQLite database immediately
-            save_chat_to_db(st.session_state.user_email, current_chat["id"], current_chat["title"], current_chat["messages"])
-            
-        except Exception as e:
-            error_msg = f"AI Error: {str(e)}"
-            message_placeholder.markdown(error_msg)
-            current_chat["messages"].append({"role": "assistant", "content": error_msg})
-            save_chat_to_db(st.session_state.user_email, current_chat["id"], current_chat["title"], current_chat["messages"])
+    # Start AI generation in a background thread so user can switch chats instantly
+    threading.Thread(
+        target=generate_background_response,
+        args=(current_chat["id"], st.session_state.user_email, list(current_chat["messages"]), persona, groq_api_key, system_prompts)
+    ).start()
+
+    with st.chat_message("assistant"):
+        st.info("AI is generating your response in the background. You can switch to other chats or keep browsing—it will update automatically when ready!")

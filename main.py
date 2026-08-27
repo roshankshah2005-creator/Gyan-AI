@@ -16,16 +16,16 @@ st.markdown("""
     <style>
         /* Distinct styling for User Questions */
         div.stChatMessage[data-testid="stChatMessage-user"] {
-            background-color: #e8f4fd !important;
-            border-left: 5px solid #1976d2 !important;
+            background-color: #1e293b !important;
+            border-left: 5px solid #3b82f6 !important;
             border-radius: 8px;
             padding: 10px;
             margin-bottom: 10px;
         }
         /* Distinct styling for AI Answers */
         div.stChatMessage[data-testid="stChatMessage-assistant"] {
-            background-color: #f4f6f8 !important;
-            border-left: 5px solid #2e7d32 !important;
+            background-color: #0f172a !important;
+            border-left: 5px solid #10b981 !important;
             border-radius: 8px;
             padding: 10px;
             margin-bottom: 10px;
@@ -173,11 +173,21 @@ groq_api_key = st.secrets.get("GROQ_API_KEY", "")
 
 st.session_state.chats = load_chats(st.session_state.user_email)
 
-# 5. Sidebar: Chat History & Controls
+# 5. Sidebar: Chat History, Persona Selector & Controls
 with st.sidebar:
     st.title("Gyan AI")
     st.caption(f"Logged in as: **{user_name}**")
     
+    st.markdown("---")
+    st.subheader("AI Persona")
+    persona = st.selectbox(
+        "Persona",
+        ["General Companion", "Exam Prep Coach", "Strict Professor", "Senior Tech Lead", "Data Science Mentor", "Creative Director", "Code Helper"],
+        key="persona_select",
+        label_visibility="collapsed"
+    )
+    
+    st.markdown("---")
     if st.button("➕ New Chat", use_container_width=True):
         conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
         c = conn.cursor()
@@ -189,7 +199,6 @@ with st.sidebar:
         st.session_state.current_chat_id = new_id
         st.rerun()
 
-    st.markdown("---")
     st.subheader("Chat History")
 
     chats_to_delete = []
@@ -235,7 +244,6 @@ if not current_chat and st.session_state.chats:
     current_chat = st.session_state.chats[0]
     st.session_state.current_chat_id = current_chat["id"]
 
-# Display current chat title
 st.header(current_chat["title"] if current_chat else "New Conversation")
 
 system_prompts = {
@@ -253,21 +261,8 @@ if current_chat:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-# Bottom layout: Chat input on the left, Persona selector on the right
-input_col, persona_col = st.columns([3, 1])
-
-with persona_col:
-    persona = st.selectbox(
-        "Persona",
-        ["General Companion", "Exam Prep Coach", "Strict Professor", "Senior Tech Lead", "Data Science Mentor", "Creative Director", "Code Helper"],
-        key="persona_select",
-        label_visibility="collapsed"
-    )
-
-with input_col:
-    prompt = st.chat_input("Ask anything or request a structured guide...")
-
-if prompt:
+# Native Streamlit chat input locked at the bottom of the screen
+if prompt := st.chat_input("Ask anything or request a structured guide..."):
     if not groq_api_key:
         st.error("Groq API key is missing! Check your secrets.toml file.")
         st.stop()
@@ -294,7 +289,7 @@ if prompt:
         except Exception:
             current_chat["title"] = prompt[:25] + "..." if len(prompt) > 25 else prompt
 
-    # Real-time streaming generation using gpt-oss-20b
+    # Real-time streaming generation
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
         full_response = ""

@@ -1,5 +1,6 @@
 import streamlit as st
-from openai import OpenAI
+from groq import Groq
+# pypdf, supabase, and streamlit-cookies-controller are ready for your advanced features here
 
 # 1. Page Configuration
 st.set_page_config(
@@ -9,23 +10,15 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for styling chat bubbles and sidebar
-st.markdown("""
-    <style>
-        .stChatMessage { border-radius: 12px; padding: 10px; margin-bottom: 10px; }
-        .stChatInputContainer { padding-bottom: 10px; }
-    </style>
-""", unsafe_allow_html=True)
-
 # 2. Initialize Session State
 if "user" not in st.session_state:
     st.session_state.user = None
 if "chats" not in st.session_state:
-    st.session_state.chats = []  # List of dicts: [{'id': 1, 'title': '...', 'messages': [...]}]
+    st.session_state.chats = []
 if "current_chat_id" not in st.session_state:
     st.session_state.current_chat_id = None
 
-# 3. Authentication Screen (If not logged in)
+# 3. Authentication Screen
 if not st.session_state.user:
     st.title("Welcome to Gyan AI")
     st.markdown("Please enter your details to get started.")
@@ -38,7 +31,6 @@ if not st.session_state.user:
         if submit_auth:
             if name_input.strip() and email_input.strip():
                 st.session_state.user = {"name": name_input, "email": email_input}
-                # Create initial chat
                 initial_chat_id = 1
                 st.session_state.chats = [{
                     "id": initial_chat_id,
@@ -51,12 +43,12 @@ if not st.session_state.user:
                 st.error("Please fill in both fields.")
     st.stop()
 
-# Get API key from Streamlit Secrets or user input sidebar
+# Get API key from Streamlit Secrets
 groq_api_key = st.secrets.get("GROQ_API_KEY", "")
 
 # 4. Sidebar: Chat History & Controls
 with st.sidebar:
-    st.title(f"Gyan AI")
+    st.title("Gyan AI")
     st.caption(f"Logged in as: **{st.session_state.user['name']}**")
     
     if st.button("➕ New Chat", use_container_width=True):
@@ -72,7 +64,6 @@ with st.sidebar:
     st.markdown("---")
     st.subheader("Chat History")
 
-    # Display Chat List with Delete Buttons
     chats_to_delete = []
     for chat in st.session_state.chats:
         col1, col2 = st.sidebar.columns([4, 1])
@@ -86,7 +77,6 @@ with st.sidebar:
             if st.button("❌", key=f"del_{chat['id']}", help="Delete chat"):
                 chats_to_delete.append(chat["id"])
 
-    # Handle deletion
     if chats_to_delete:
         st.session_state.chats = [c for c in st.session_state.chats if c["id"] not in chats_to_delete]
         if not st.session_state.chats:
@@ -104,13 +94,11 @@ with st.sidebar:
         st.rerun()
 
 # 5. Main Chat Interface
-# Get current chat object
 current_chat = next((c for c in st.session_state.chats if c["id"] == st.session_state.current_chat_id), None)
 if not current_chat:
     current_chat = st.session_state.chats[0]
     st.session_state.current_chat_id = current_chat["id"]
 
-# Header & Persona Selector
 col_title, col_persona = st.columns([2, 2])
 with col_title:
     st.header(current_chat["title"])
@@ -121,7 +109,6 @@ with col_persona:
         label_visibility="collapsed"
     )
 
-# System Prompt Mapping
 system_prompts = {
     "General Companion": "You are Gyan, an intelligent multi-persona AI companion.",
     "Exam Prep Coach": "You are an expert Exam Prep Coach, helping students break down derivations, concepts, and study schedules clearly.",
@@ -131,36 +118,29 @@ system_prompts = {
     "Creative Director": "You are a Creative Director focusing on design principles, typography, and visual aesthetics."
 }
 
-# Display existing messages
 for message in current_chat["messages"]:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# 6. Chat Input & API Call
 if prompt := st.chat_input("Ask anything or request a structured guide..."):
     if not groq_api_key:
-        st.error("Groq API key is missing! Add it in Streamlit Secrets or code.")
+        st.error("Groq API key is missing! Check your secrets.toml file.")
         st.stop()
 
-    # Append user message
     current_chat["messages"].append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Auto-update chat title on first message
     if current_chat["title"] == "New Conversation":
         current_chat["title"] = prompt[:25] + "..." if len(prompt) > 25 else prompt
 
-    # Generate Assistant response
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
         message_placeholder.markdown("Thinking...")
         
         try:
-            client = OpenAI(
-                api_key=groq_api_key,
-                base_url="https://api.groq.com/openai/v1"
-            )
+            # Using the official Groq Python SDK matching your requirements.txt
+            client = Groq(api_key=groq_api_key)
             
             formatted_messages = [{"role": "system", "content": system_prompts.get(persona, system_prompts["General Companion"])}]
             for m in current_chat["messages"]:
@@ -175,8 +155,6 @@ if prompt := st.chat_input("Ask anything or request a structured guide..."):
             
             reply = response.choices[0].message.content
             message_placeholder.markdown(reply)
-            
-            # Save assistant response
             current_chat["messages"].append({"role": "assistant", "content": reply})
             
         except Exception as e:

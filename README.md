@@ -1,34 +1,35 @@
-# 🧠 Gyan AI
+# 🧠 GYAN AI
 
-Gyan AI is a high-performance, multi-persona conversational assistant built with **Streamlit** and powered by **Groq's ultra-fast inference engine**. It features dynamic persona switching, document context ingestion (RAG), and lightning-fast text processing, completely bypassing complex cloud configuration overhead.
-
----
-
-## ✨ Features
-
-* **Multi-Persona Intelligence**: Seamlessly switch between specialized AI modes:
-  * **Senior Tech Lead**: For clean code snippets, architecture choices, and rigorous code reviews.
-  * **Data Science Mentor**: For machine learning workflows, pandas operations, and statistical logic.
-  * **Exam Prep Coach**: For structured academic revision, chapter summaries, and high-yield concepts.
-  * **Creative Director**: For typography feedback, design layouts, and color palettes.
-* **Document Context Ingestion (RAG)**: Upload PDF or TXT files directly to ground the AI's responses in your custom documents.
-* **Blazing Fast Performance**: Powered by Groq's LPU infrastructure, delivering thousands of tokens per second.
-* **Clean UI**: Built with Streamlit for a responsive, clean, and modern web interface.
+Hey there! Welcome to **GYAN AI**—a sleek, multi-persona AI companion web app built using Python, Streamlit, and the Groq API. It comes packed with features like persistent SQLite chat storage, user authentication with a password reset flow, built-in math verification to keep out bots, and a custom UI design.
 
 ---
 
-## 🛠️ Tech Stack
+## ✨ What's Inside?
 
-* **Frontend & UI**: [Streamlit](https://streamlit.io/)
-* **AI Inference Provider**: [Groq API](https://groq.com/) (`openai/gpt-oss-20b`)
-* **Document Parsing**: `pypdf`
-* **Language**: Python 3.10+
+* **Multiple AI Personas:** Easily switch between different AI modes depending on what you're working on—whether you need a general companion, an exam prep coach, a strict academic professor, a senior tech lead, a data science mentor, a creative director, or a code helper.
+* **Real-Time Streaming:** Responses stream smoothly token-by-token so you don't have to wait around.
+* **Saved Chats:** Your conversation history and custom chat titles are automatically saved in a local SQLite database.
+* **Auth & Security:** Simple and secure Sign Up, Log In, and Forgot Password flows backed up by quick math CAPTCHA checks to block spam bots.
+* **Custom Branding:** Styled with custom Google Fonts (Orbitron) and a clean gradient logo.
 
 ---
 
-## 🚀 Quick Setup & Installation
+## 🛠️ Built With
 
-### 1. Clone the Repository
-```bash
-git clone [https://github.com/your-username/gyan-ai.git](https://github.com/your-username/gyan-ai.git)
-cd gyan-ai
+* **Frontend:** [Streamlit](https://streamlit.io/)
+* **AI Engine:** [Groq API](https://groq.com/)
+* **Database:** SQLite & JSON
+* **Styling:** Custom CSS & Google Fonts
+
+---
+
+## 📂 Project Layout
+
+```text
+📦 gyan-ai
+┣ 📂 .streamlit
+┃ ┗ 📜 secrets.toml
+┣ 📜 README.md
+┣ 📜 main.py
+┣ 📜 ml_model.py
+┗ 📜 requirements.txt

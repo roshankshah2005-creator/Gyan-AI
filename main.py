@@ -117,7 +117,7 @@ def delete_chat_from_db(chat_id):
     conn.commit()
     conn.close()
 
-# Background thread worker to handle AI responses so users can switch chats freely
+# Background thread worker using the ultra-fast Llama 3.1 8B Instant model
 def generate_background_response(chat_id, email, messages_snapshot, persona, api_key, system_prompts):
     try:
         client = Groq(api_key=api_key)
@@ -126,22 +126,23 @@ def generate_background_response(chat_id, email, messages_snapshot, persona, api
             formatted_messages.append({"role": m["role"], "content": m["content"]})
 
         response = client.chat.completions.create(
-            model="openai/gpt-oss-20b",
+            model="llama-3.1-8b-instant",  # Blazing fast inference model
             messages=formatted_messages,
             temperature=0.6,
-            max_tokens=1500
+            max_tokens=800  # Capped for faster completion
         )
         reply = response.choices[0].message.content
         
-        # Fetch current messages from DB to avoid race conditions, append reply, and save
         conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
         c = conn.cursor()
         c.execute("SELECT title, messages FROM chats WHERE id = ?", (chat_id,))
         row = c.fetchone()
         if row:
-            current_title = row[0]
             current_msgs = json.loads(row[1])
-            current_msgs.append({"role": "assistant", "content": reply})
+            if current_msgs and current_msgs[-1]["role"] == "assistant":
+                current_msgs[-1]["content"] = reply
+            else:
+                current_msgs.append({"role": "assistant", "content": reply})
             c.execute("UPDATE chats SET messages = ? WHERE id = ?", (json.dumps(current_msgs), chat_id))
             conn.commit()
         conn.close()
@@ -191,7 +192,7 @@ if not st.session_state.user_email:
                     conn.commit()
                     new_chat_id = c.lastrowid
                     conn.close()
-                    user_chats = [{"id": new_chat_id, "title": "New Conversation", "messages": []}]
+                    user_chats = [{"id": new_id, "title": "New Conversation", "messages": []}]
                 
                 st.session_state.chats = user_chats
                 st.session_state.current_chat_id = user_chats[0]["id"]
@@ -203,7 +204,6 @@ if not st.session_state.user_email:
 user_name = get_user(st.session_state.user_email)
 groq_api_key = st.secrets.get("GROQ_API_KEY", "")
 
-# Sync session state chats with database on every run so background updates appear immediately
 st.session_state.chats = load_chats(st.session_state.user_email)
 
 # 5. Sidebar: Chat History & Controls
@@ -298,38 +298,35 @@ if prompt := st.chat_input("Ask anything or request a structured guide..."):
         st.error("Groq API key is missing! Check your secrets.toml file.")
         st.stop()
 
-    # Append user message
     current_chat["messages"].append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     scroll_to_bottom()
 
-    # Generate smart title if new
     if current_chat["title"] == "New Conversation":
         try:
             client_temp = Groq(api_key=groq_api_key)
             title_res = client_temp.chat.completions.create(
-                model="openai/gpt-oss-20b",
+                model="llama-3.1-8b-instant",
                 messages=[
-                    {"role": "system", "content": "Generate a short, concise title (max 4 words) summarizing this user query. No quotes, no punctuation."},
+                    {"role": "system", "content": "Generate a short title (max 4 words) summarizing this query. No quotes, no punctuation."},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=10
+                max_tokens=8
             )
             gen_title = title_res.choices[0].message.content.strip()
             current_chat["title"] = gen_title if gen_title else (prompt[:25] + "...")
         except Exception:
             current_chat["title"] = prompt[:25] + "..." if len(prompt) > 25 else prompt
 
-    # Save initial user message + new title to DB immediately
+    current_chat["messages"].append({"role": "assistant", "content": "Generating answer..."})
     save_chat_to_db(st.session_state.user_email, current_chat["id"], current_chat["title"], current_chat["messages"])
 
-    # Start AI generation in a background thread so user can switch chats instantly
     threading.Thread(
         target=generate_background_response,
         args=(current_chat["id"], st.session_state.user_email, list(current_chat["messages"]), persona, groq_api_key, system_prompts)
     ).start()
 
     with st.chat_message("assistant"):
-        st.info("AI is generating your response in the background. You can switch to other chats or keep browsing—it will update automatically when ready!")
+        st.markdown("Generating answer...")

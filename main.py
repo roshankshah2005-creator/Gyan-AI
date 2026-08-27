@@ -275,7 +275,7 @@ if prompt := st.chat_input("Ask anything or request a structured guide..."):
         try:
             client_temp = Groq(api_key=groq_api_key)
             title_res = client_temp.chat.completions.create(
-                model="llama-3.1-8b-instant",
+                model="openai/gpt-oss-20b",
                 messages=[
                     {"role": "system", "content": "Generate a short title (max 4 words) summarizing this query. No quotes, no punctuation."},
                     {"role": "user", "content": prompt}
@@ -287,7 +287,7 @@ if prompt := st.chat_input("Ask anything or request a structured guide..."):
         except Exception:
             current_chat["title"] = prompt[:25] + "..." if len(prompt) > 25 else prompt
 
-    # Real-time streaming generation
+    # Real-time streaming generation using gpt-oss-20b
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
         full_response = ""
@@ -299,7 +299,7 @@ if prompt := st.chat_input("Ask anything or request a structured guide..."):
                 formatted_messages.append({"role": m["role"], "content": m["content"]})
 
             stream = client.chat.completions.create(
-                model="llama-3.1-8b-instant",
+                model="openai/gpt-oss-20b",
                 messages=formatted_messages,
                 temperature=0.6,
                 max_tokens=1024,
@@ -317,7 +317,6 @@ if prompt := st.chat_input("Ask anything or request a structured guide..."):
             full_response = f"AI Error: {str(e)}"
             message_placeholder.markdown(full_response)
 
-    # Save complete assistant response to chat messages and database
     current_chat["messages"].append({"role": "assistant", "content": full_response})
     save_chat_to_db(st.session_state.user_email, current_chat["id"], current_chat["title"], current_chat["messages"])
     scroll_to_bottom()

@@ -2,7 +2,6 @@ import streamlit as st
 from groq import Groq
 import sqlite3
 import json
-import threading
 import streamlit.components.v1 as components
 
 # 1. Page Configuration & Custom CSS for Distinct Question/Answer Bubbles
@@ -116,38 +115,6 @@ def delete_chat_from_db(chat_id):
     c.execute("DELETE FROM chats WHERE id = ?", (chat_id,))
     conn.commit()
     conn.close()
-
-# Background thread worker using the ultra-fast Llama 3.1 8B Instant model
-def generate_background_response(chat_id, email, messages_snapshot, persona, api_key, system_prompts):
-    try:
-        client = Groq(api_key=api_key)
-        formatted_messages = [{"role": "system", "content": system_prompts.get(persona, system_prompts["General Companion"])}]
-        for m in messages_snapshot:
-            formatted_messages.append({"role": m["role"], "content": m["content"]})
-
-        response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",  # Blazing fast inference model
-            messages=formatted_messages,
-            temperature=0.6,
-            max_tokens=800  # Capped for faster completion
-        )
-        reply = response.choices[0].message.content
-        
-        conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
-        c = conn.cursor()
-        c.execute("SELECT title, messages FROM chats WHERE id = ?", (chat_id,))
-        row = c.fetchone()
-        if row:
-            current_msgs = json.loads(row[1])
-            if current_msgs and current_msgs[-1]["role"] == "assistant":
-                current_msgs[-1]["content"] = reply
-            else:
-                current_msgs.append({"role": "assistant", "content": reply})
-            c.execute("UPDATE chats SET messages = ? WHERE id = ?", (json.dumps(current_msgs), chat_id))
-            conn.commit()
-        conn.close()
-    except Exception as e:
-        print(f"Background execution error: {e}")
 
 # 3. Session State & URL Parameter Auto-Login
 if "user_email" not in st.session_state:
@@ -320,13 +287,37 @@ if prompt := st.chat_input("Ask anything or request a structured guide..."):
         except Exception:
             current_chat["title"] = prompt[:25] + "..." if len(prompt) > 25 else prompt
 
-    current_chat["messages"].append({"role": "assistant", "content": "Generating answer..."})
-    save_chat_to_db(st.session_state.user_email, current_chat["id"], current_chat["title"], current_chat["messages"])
-
-    threading.Thread(
-        target=generate_background_response,
-        args=(current_chat["id"], st.session_state.user_email, list(current_chat["messages"]), persona, groq_api_key, system_prompts)
-    ).start()
-
+    # Real-time streaming generation
     with st.chat_message("assistant"):
-        st.markdown("Generating answer...")
+        message_placeholder = st.empty()
+        full_response = ""
+        
+        try:
+            client = Groq(api_key=groq_api_key)
+            formatted_messages = [{"role": "system", "content": system_prompts.get(persona, system_prompts["General Companion"])}]
+            for m in current_chat["messages"]:
+                formatted_messages.append({"role": m["role"], "content": m["content"]})
+
+            stream = client.chat.completions.create(
+                model="llama-3.1-8b-instant",
+                messages=formatted_messages,
+                temperature=0.6,
+                max_tokens=1024,
+                stream=True
+            )
+            
+            for chunk in stream:
+                if chunk.choices[0].delta.content is not None:
+                    full_response += chunk.choices[0].delta.content
+                    message_placeholder.markdown(full_response + "▌")
+            
+            message_placeholder.markdown(full_response)
+            
+        except Exception as e:
+            full_response = f"AI Error: {str(e)}"
+            message_placeholder.markdown(full_response)
+
+    # Save complete assistant response to chat messages and database
+    current_chat["messages"].append({"role": "assistant", "content": full_response})
+    save_chat_to_db(st.session_state.user_email, current_chat["id"], current_chat["title"], current_chat["messages"])
+    scroll_to_bottom()

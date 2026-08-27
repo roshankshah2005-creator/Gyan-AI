@@ -1,5 +1,6 @@
 import streamlit as st
 from groq import Groq
+from streamlit_cookies_controller import CookieController
 
 # 1. Page Configuration
 st.set_page_config(
@@ -9,15 +10,21 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. Initialize Session State
+# Initialize Cookie Controller for persistent sessions
+controller = CookieController()
+
+# 2. Initialize Session State & Check Cookies
 if "user" not in st.session_state:
-    st.session_state.user = None
+    # Attempt to restore user session from browser cookies on refresh
+    saved_user = controller.get("gyan_logged_in_user")
+    st.session_state.user = saved_user if saved_user else None
+
 if "chats" not in st.session_state:
     st.session_state.chats = []
 if "current_chat_id" not in st.session_state:
     st.session_state.current_chat_id = None
 
-# 3. Authentication Screen
+# 3. Authentication Screen (Skipped automatically if cookie exists)
 if not st.session_state.user:
     st.title("Welcome to Gyan AI")
     st.markdown("Please enter your details to get started.")
@@ -29,7 +36,12 @@ if not st.session_state.user:
         
         if submit_auth:
             if name_input.strip() and email_input.strip():
-                st.session_state.user = {"name": name_input, "email": email_input}
+                user_data = {"name": name_input, "email": email_input}
+                st.session_state.user = user_data
+                
+                # Save session in browser cookie (persists on page refresh)
+                controller.set("gyan_logged_in_user", user_data, max_age=30*24*60*60)
+                
                 initial_chat_id = 1
                 st.session_state.chats = [{
                     "id": initial_chat_id,
@@ -88,6 +100,8 @@ with st.sidebar:
 
     st.markdown("---")
     if st.button("Log Out", use_container_width=True):
+        # Clear cookie and session state on logout
+        controller.remove("gyan_logged_in_user")
         st.session_state.user = None
         st.session_state.chats = []
         st.rerun()
@@ -95,8 +109,14 @@ with st.sidebar:
 # 5. Main Chat Interface
 current_chat = next((c for c in st.session_state.chats if c["id"] == st.session_state.current_chat_id), None)
 if not current_chat:
-    current_chat = st.session_state.chats[0]
-    st.session_state.current_chat_id = current_chat["id"]
+    if st.session_state.chats:
+        current_chat = st.session_state.chats[0]
+        st.session_state.current_chat_id = current_chat["id"]
+    else:
+        initial_chat_id = 1
+        st.session_state.chats = [{"id": initial_chat_id, "title": "New Conversation", "messages": []}]
+        st.session_state.current_chat_id = initial_chat_id
+        current_chat = st.session_state.chats[0]
 
 col_title, col_persona = st.columns([2, 2])
 with col_title:
@@ -131,8 +151,22 @@ if prompt := st.chat_input("Ask anything or request a structured guide..."):
     with st.chat_message("user"):
         st.markdown(prompt)
 
+    # Automatically generate a smart title for the chat history
     if current_chat["title"] == "New Conversation":
-        current_chat["title"] = prompt[:25] + "..." if len(prompt) > 25 else prompt
+        try:
+            client_temp = Groq(api_key=groq_api_key)
+            title_res = client_temp.chat.completions.create(
+                model="openai/gpt-oss-20b",
+                messages=[
+                    {"role": "system", "content": "Generate a short, concise title (max 4 words) summarizing this user query. No quotes, no punctuation."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=10
+            )
+            gen_title = title_res.choices[0].message.content.strip()
+            current_chat["title"] = gen_title if gen_title else (prompt[:25] + "...")
+        except Exception:
+            current_chat["title"] = prompt[:25] + "..." if len(prompt) > 25 else prompt
 
     with st.chat_message("assistant"):
         message_placeholder = st.empty()

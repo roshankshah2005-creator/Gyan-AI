@@ -21,12 +21,12 @@ st.markdown("""
         /* Custom Gradient Logo Styling */
         .brand-logo {
             font-family: 'Orbitron', sans-serif;
-            font-size: 26px;
+            font-size: 28px;
             font-weight: 700;
             background: linear-gradient(45deg, #3b82f6, #10b981);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            letter-spacing: 1px;
+            letter-spacing: 2px;
             margin-bottom: 5px;
         }
 
@@ -202,24 +202,45 @@ if "current_chat_id" not in st.session_state:
 if "forgot_password_mode" not in st.session_state:
     st.session_state.forgot_password_mode = False
 
+# Captcha numbers setup
 if "captcha_num1" not in st.session_state:
     st.session_state.captcha_num1 = random.randint(1, 10)
     st.session_state.captcha_num2 = random.randint(1, 10)
+
+if "reset_captcha_num1" not in st.session_state:
+    st.session_state.reset_captcha_num1 = random.randint(1, 10)
+    st.session_state.reset_captcha_num2 = random.randint(1, 10)
 
 # 4. Authentication & Forgot Password Screen
 if not st.session_state.user_email:
     st.title("Welcome to Gyan AI")
     
     if st.session_state.forgot_password_mode:
-        st.subheader("Reset Password")
+        st.subheader("Reset Password & Verify Identity")
         with st.form("forgot_password_form"):
             reset_email = st.text_input("Enter your registered Email Address").strip().lower()
             new_pass = st.text_input("Enter New Password", type="password").strip()
+            
+            rn1 = st.session_state.reset_captcha_num1
+            rn2 = st.session_state.reset_captcha_num2
+            reset_captcha_input = st.text_input(f"Human Verification: What is {rn1} + {rn2}?")
+            
             submit_reset = st.form_submit_button("Update Password")
             back_to_login = st.form_submit_button("Back to Log In")
             
             if submit_reset:
-                if reset_email and new_pass:
+                try:
+                    reset_user_answer = int(reset_captcha_input.strip())
+                except ValueError:
+                    reset_user_answer = -999
+
+                if not reset_email or not new_pass:
+                    st.error("Please fill in both email and new password.")
+                elif reset_user_answer != (rn1 + rn2):
+                    st.error("Incorrect verification answer! Please try again.")
+                    st.session_state.reset_captcha_num1 = random.randint(1, 10)
+                    st.session_state.reset_captcha_num2 = random.randint(1, 10)
+                else:
                     user_exists = get_user(reset_email)
                     if user_exists:
                         update_password(reset_email, new_pass)
@@ -228,8 +249,6 @@ if not st.session_state.user_email:
                         st.rerun()
                     else:
                         st.error("No account found with this email address.")
-                else:
-                    st.error("Please fill in both fields.")
             
             if back_to_login:
                 st.session_state.forgot_password_mode = False
@@ -314,9 +333,9 @@ groq_api_key = st.secrets.get("GROQ_API_KEY", "")
 
 st.session_state.chats = load_chats(st.session_state.user_email)
 
-# 5. Sidebar: Chat History, Persona Selector & Controls with Custom Font Logo
+# 5. Sidebar: Chat History, Persona Selector & Controls with "GYAN" Logo
 with st.sidebar:
-    st.markdown('<div class="brand-logo">GYAN AI</div>', unsafe_allow_html=True)
+    st.markdown('<div class="brand-logo">GYAN</div>', unsafe_allow_html=True)
     st.caption(f"Logged in as: **{user_name}**")
     
     st.markdown("---")

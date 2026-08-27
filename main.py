@@ -235,15 +235,8 @@ if not current_chat and st.session_state.chats:
     current_chat = st.session_state.chats[0]
     st.session_state.current_chat_id = current_chat["id"]
 
-col_title, col_persona = st.columns([2, 2])
-with col_title:
-    st.header(current_chat["title"] if current_chat else "New Conversation")
-with col_persona:
-    persona = st.selectbox(
-        "Persona",
-        ["General Companion", "Exam Prep Coach", "Strict Professor", "Senior Tech Lead", "Data Science Mentor", "Creative Director", "Code Helper"],
-        label_visibility="collapsed"
-    )
+# Display current chat title
+st.header(current_chat["title"] if current_chat else "New Conversation")
 
 system_prompts = {
     "General Companion": "You are Gyan, an intelligent multi-persona AI companion created by Roshan, a student of NIT Durgapur.",
@@ -260,7 +253,21 @@ if current_chat:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-if prompt := st.chat_input("Ask anything or request a structured guide..."):
+# Bottom layout: Chat input on the left, Persona selector on the right
+input_col, persona_col = st.columns([3, 1])
+
+with persona_col:
+    persona = st.selectbox(
+        "Persona",
+        ["General Companion", "Exam Prep Coach", "Strict Professor", "Senior Tech Lead", "Data Science Mentor", "Creative Director", "Code Helper"],
+        key="persona_select",
+        label_visibility="collapsed"
+    )
+
+with input_col:
+    prompt = st.chat_input("Ask anything or request a structured guide...")
+
+if prompt:
     if not groq_api_key:
         st.error("Groq API key is missing! Check your secrets.toml file.")
         st.stop()

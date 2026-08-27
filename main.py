@@ -4,7 +4,7 @@ import sqlite3
 import json
 import streamlit.components.v1 as components
 
-# 1. Page Configuration & Custom CSS to Hide GitHub/Streamlit Header Icons & Center Greeting
+# 1. Page Configuration & Custom CSS to Hide GitHub/Streamlit Header Icons
 st.set_page_config(
     page_title="Gyan AI - Intelligent Companion",
     page_icon="🤖",
@@ -57,7 +57,7 @@ def scroll_to_bottom():
 def init_db():
     conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS users (email TEXT PRIMARY KEY, name TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS users (email TEXT PRIMARY KEY, name TEXT, password TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS chats (
                     id INTEGER PRIMARY KEY AUTOINCREMENT, 
                     email TEXT, 
@@ -78,12 +78,27 @@ def get_user(email):
     conn.close()
     return row[0] if row else None
 
-def save_user(email, name):
+def register_user(email, name, password):
     conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
     c = conn.cursor()
-    c.execute("INSERT OR REPLACE INTO users (email, name) VALUES (?, ?)", (email, name))
+    c.execute("SELECT email FROM users WHERE email = ?", (email,))
+    if c.fetchone():
+        conn.close()
+        return False
+    c.execute("INSERT INTO users (email, name, password) VALUES (?, ?, ?)", (email, name, password))
     conn.commit()
     conn.close()
+    return True
+
+def verify_user(email, password):
+    conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
+    c = conn.cursor()
+    c.execute("SELECT name, password FROM users WHERE email = ?", (email,))
+    row = c.fetchone()
+    conn.close()
+    if row and row[1] == password:
+        return row[0]
+    return None
 
 def load_chats(email):
     conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
@@ -139,39 +154,71 @@ if "chats" not in st.session_state:
 if "current_chat_id" not in st.session_state:
     st.session_state.current_chat_id = None
 
-# 4. Authentication Screen
+# 4. Separate Authentication Screen (Sign Up / Log In)
 if not st.session_state.user_email:
     st.title("Welcome to Gyan AI")
-    st.markdown("Please enter your details to sign in or register.")
+    auth_mode = st.radio("Choose Action", ["Log In", "Sign Up"], horizontal=True)
     
-    with st.form("auth_form"):
-        name_input = st.text_input("Your Name")
-        email_input = st.text_input("Email Address (Used to save your account)")
-        submit_auth = st.form_submit_button("Continue to App")
-        
-        if submit_auth:
-            name = name_input.strip()
-            email = email_input.strip().lower()
-            if name and email:
-                save_user(email, name)
-                st.session_state.user_email = email
-                st.query_params["email"] = email
-                
-                user_chats = load_chats(email)
-                if not user_chats:
-                    conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
-                    c = conn.cursor()
-                    c.execute("INSERT INTO chats (email, title, messages) VALUES (?, ?, ?)", (email, "New Conversation", json.dumps([])))
-                    conn.commit()
-                    new_chat_id = c.lastrowid
-                    conn.close()
-                    user_chats = [{"id": new_id, "title": "New Conversation", "messages": []}]
-                
-                st.session_state.chats = user_chats
-                st.session_state.current_chat_id = user_chats[0]["id"]
-                st.rerun()
-            else:
-                st.error("Please fill in both fields correctly.")
+    if auth_mode == "Log In":
+        with st.form("login_form"):
+            email_input = st.text_input("Email Address")
+            password_input = st.text_input("Password", type="password")
+            submit_login = st.form_submit_button("Log In")
+            
+            if submit_login:
+                email = email_input.strip().lower()
+                password = password_input.strip()
+                name = verify_user(email, password)
+                if name:
+                    st.session_state.user_email = email
+                    st.query_params["email"] = email
+                    
+                    user_chats = load_chats(email)
+                    if not user_chats:
+                        conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
+                        c = conn.cursor()
+                        c.execute("INSERT INTO chats (email, title, messages) VALUES (?, ?, ?)", (email, "New Conversation", json.dumps([])))
+                        conn.commit()
+                        new_chat_id = c.lastrowid
+                        conn.close()
+                        user_chats = [{"id": new_id, "title": "New Conversation", "messages": []}]
+                    
+                    st.session_state.chats = user_chats
+                    st.session_state.current_chat_id = user_chats[0]["id"]
+                    st.rerun()
+                else:
+                    st.error("Invalid email or password.")
+    else:
+        with st.form("signup_form"):
+            name_input = st.text_input("Your Name")
+            email_input = st.text_input("Email Address")
+            password_input = st.text_input("Password", type="password")
+            submit_signup = st.form_submit_button("Sign Up")
+            
+            if submit_signup:
+                name = name_input.strip()
+                email = email_input.strip().lower()
+                password = password_input.strip()
+                if name and email and password:
+                    success = register_user(email, name, password)
+                    if success:
+                        st.session_state.user_email = email
+                        st.query_params["email"] = email
+                        
+                        conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
+                        c = conn.cursor()
+                        c.execute("INSERT INTO chats (email, title, messages) VALUES (?, ?, ?)", (email, "New Conversation", json.dumps([])))
+                        conn.commit()
+                        new_chat_id = c.lastrowid
+                        conn.close()
+                        
+                        st.session_state.chats = [{"id": new_id, "title": "New Conversation", "messages": []}]
+                        st.session_state.current_chat_id = new_id
+                        st.rerun()
+                    else:
+                        st.error("Email is already registered! Please switch to Log In.")
+                else:
+                    st.error("Please fill in all fields correctly.")
     st.stop()
 
 user_name = get_user(st.session_state.user_email)
@@ -250,7 +297,7 @@ if not current_chat and st.session_state.chats:
     current_chat = st.session_state.chats[0]
     st.session_state.current_chat_id = current_chat["id"]
 
-# Display centered greeting only if messages list is empty; otherwise render nothing at the top
+# Display centered greeting only if messages list is empty; disappears on first prompt
 if current_chat and len(current_chat["messages"]) == 0:
     st.markdown(f"<h1 style='text-align: center; margin-top: 20vh;'>How can I help you, {user_name}!!</h1>", unsafe_allow_html=True)
 

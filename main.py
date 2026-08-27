@@ -57,7 +57,14 @@ def scroll_to_bottom():
 def init_db():
     conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS users (email TEXT PRIMARY KEY, name TEXT, password TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS users (email TEXT PRIMARY KEY, name TEXT)''')
+    
+    # Safely check if password column exists, add it if missing
+    c.execute("PRAGMA table_info(users)")
+    columns = [col[1] for col in c.fetchall()]
+    if "password" not in columns:
+        c.execute("ALTER TABLE users ADD COLUMN password TEXT")
+
     c.execute('''CREATE TABLE IF NOT EXISTS chats (
                     id INTEGER PRIMARY KEY AUTOINCREMENT, 
                     email TEXT, 
@@ -81,10 +88,19 @@ def get_user(email):
 def register_user(email, name, password):
     conn = sqlite3.connect('gyan_ai.db', check_same_thread=False)
     c = conn.cursor()
+    
+    # Failsafe check right inside registration to ensure schema is fully updated
+    c.execute("PRAGMA table_info(users)")
+    columns = [col[1] for col in c.fetchall()]
+    if "password" not in columns:
+        c.execute("ALTER TABLE users ADD COLUMN password TEXT")
+        conn.commit()
+
     c.execute("SELECT email FROM users WHERE email = ?", (email,))
     if c.fetchone():
         conn.close()
         return False
+    
     c.execute("INSERT INTO users (email, name, password) VALUES (?, ?, ?)", (email, name, password))
     conn.commit()
     conn.close()

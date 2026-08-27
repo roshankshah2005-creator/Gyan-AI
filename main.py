@@ -4,7 +4,7 @@ import sqlite3
 import json
 import streamlit.components.v1 as components
 
-# 1. Page Configuration & Custom CSS to Hide GitHub/Streamlit Header Icons
+# 1. Page Configuration & Custom CSS to Hide GitHub/Streamlit Header Icons & Center Greeting
 st.set_page_config(
     page_title="Gyan AI - Intelligent Companion",
     page_icon="🤖",
@@ -250,9 +250,9 @@ if not current_chat and st.session_state.chats:
     current_chat = st.session_state.chats[0]
     st.session_state.current_chat_id = current_chat["id"]
 
-# Display "Hi, Username!!" with emoji for empty chats, then switch to chat title once started
+# Display centered greeting for empty chats, then switch to chat title once started
 if current_chat and (current_chat["title"] == "New Conversation" or len(current_chat["messages"]) == 0):
-    st.header(f"How can I help you, {user_name}?")
+    st.markdown(f"<h1 style='text-align: center; margin-top: 20vh;'>How can I help you, {user_name}!!</h1>", unsafe_allow_html=True)
 else:
     st.header(current_chat["title"] if current_chat else "Gyan AI")
 

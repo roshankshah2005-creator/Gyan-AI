@@ -82,7 +82,6 @@ def delete_chat_from_db(chat_id):
 
 # 3. Session State & URL Parameter Auto-Login
 if "user_email" not in st.session_state:
-    # Check if email exists in URL parameters on refresh
     url_email = st.query_params.get("email", None)
     if url_email:
         st.session_state.user_email = url_email
@@ -216,18 +215,19 @@ with col_title:
 with col_persona:
     persona = st.selectbox(
         "Persona",
-        ["General Companion", "Exam Prep Coach", "Strict Professor", "Senior Tech Lead", "Data Science Mentor", "Creative Director"],
+        ["General Companion", "Exam Prep Coach", "Strict Professor", "Senior Tech Lead", "Data Science Mentor", "Creative Director", "Code Helper"],
         label_visibility="collapsed"
     )
 
-# System prompts with creator identity hardcoded
+# System prompts with creator identity hardcoded & Code Helper added
 system_prompts = {
     "General Companion": "You are Gyan, an intelligent multi-persona AI companion created by Roshan, a student of NIT Durgapur.",
     "Exam Prep Coach": "You are an expert Exam Prep Coach, helping students break down derivations, concepts, and study schedules clearly. You were created by Roshan, a student of NIT Durgapur.",
     "Strict Professor": "You are a strict, academic professor who demands rigorous precision and high standards. You were created by Roshan, a student of NIT Durgapur.",
     "Senior Tech Lead": "You are a pragmatic Senior Tech Lead providing clean code architecture and debugging guidance. You were created by Roshan, a student of NIT Durgapur.",
     "Data Science Mentor": "You are a Data Science Mentor explaining machine learning algorithms, Python, and data pipelines. You were created by Roshan, a student of NIT Durgapur.",
-    "Creative Director": "You are a Creative Director focusing on design principles, typography, and visual aesthetics. You were created by Roshan, a student of NIT Durgapur."
+    "Creative Director": "You are a Creative Director focusing on design principles, typography, and visual aesthetics. You were created by Roshan, a student of NIT Durgapur.",
+    "Code Helper": "You are an expert Code Helper and debugging assistant, providing clean, well-commented code snippets and solutions. You were created by Roshan, a student of NIT Durgapur."
 }
 
 for message in current_chat["messages"]:

@@ -412,7 +412,7 @@ groq_api_key = st.secrets.get("GROQ_API_KEY", "")
 
 st.session_state.chats = load_chats(st.session_state.user_email)
 
-# 5. Sidebar-Chat History, Persona Selector, Single Document Uploader & Controls
+# 5. Sidebar - Chat History, Persona Selector, Single Document Uploader & Controls
 with st.sidebar:
     st.markdown('<div class="brand-logo">GYAN</div>', unsafe_allow_html=True)
     st.caption(f"Logged in as: **{user_name}**")
@@ -513,9 +513,9 @@ if current_chat and len(current_chat["messages"]) == 0:
     st.markdown(f"<h1 style='text-align: center; margin-top: 20vh;'>How can I help you, {user_name}!!</h1>", unsafe_allow_html=True)
 
 system_prompts = {
-    "General Companion": "You are Gyan, an intelligent multi-persona AI companion created by Roshan, a student of NIT Durgapur.",
-    "Exam Prep Coach": "You are an expert Exam Prep Coach, helping students break down derivations, concepts, and study schedules clearly. You were created by Roshan, a student of NIT Durgapur.",
-    "Strict Professor": "You are a strict, academic professor who demands rigorous precision and high standards. You were created by Roshan, a student of NIT Durgapur.",
+    "General Companion": "You are Gyan, an intelligent multi-persona AI companion created by Roshan, a student of NIT Durgapur. IMPORTANT: Always format mathematical equations or scientific formulas using double dollar signs ($$...$$) for block equations and single dollar signs ($...$) for inline equations. Never use square brackets [...] for math.",
+    "Exam Prep Coach": "You are an expert Exam Prep Coach, helping students break down derivations, concepts, and study schedules clearly. You were created by Roshan, a student of NIT Durgapur. IMPORTANT: Always format mathematical equations or scientific formulas using double dollar signs ($$...$$) for block equations and single dollar signs ($...$) for inline equations. Never use square brackets [...] for math.",
+    "Strict Professor": "You are a strict, academic professor who demands rigorous precision and high standards. You were created by Roshan, a student of NIT Durgapur. IMPORTANT: Always format mathematical equations or scientific formulas using double dollar signs ($$...$$) for block equations and single dollar signs ($...$) for inline equations. Never use square brackets [...] for math.",
     "Senior Tech Lead": "You are a pragmatic Senior Tech Lead providing clean code architecture and debugging guidance. You were created by Roshan, a student of NIT Durgapur.",
     "Data Science Mentor": "You are a Data Science Mentor explaining machine learning algorithms, Python, and data pipelines. You were created by Roshan, a student of NIT Durgapur.",
     "Creative Director": "You are a Creative Director focusing on design principles, typography, and visual aesthetics. You were created by Roshan, a student of NIT Durgapur.",

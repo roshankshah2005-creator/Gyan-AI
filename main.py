@@ -352,7 +352,7 @@ if not st.session_state.user_email:
                     
                     user_chats = load_chats(email)
                     if not user_chats:
-                        create_new_chat(email)
+                        new_id = create_new_chat(email)
                         user_chats = load_chats(email)
                     
                     st.session_state.chats = user_chats
@@ -410,7 +410,13 @@ if not st.session_state.user_email:
 user_name = get_user(st.session_state.user_email)
 groq_api_key = st.secrets.get("GROQ_API_KEY", "")
 
-st.session_state.chats = load_chats(st.session_state.user_email)
+# Ensure chats are loaded for logged-in user
+if not st.session_state.chats and st.session_state.user_email:
+    st.session_state.chats = load_chats(st.session_state.user_email)
+    if not st.session_state.chats:
+        new_id = create_new_chat(st.session_state.user_email)
+        st.session_state.chats = load_chats(st.session_state.user_email)
+    st.session_state.current_chat_id = st.session_state.chats[0]["id"]
 
 # 5. Sidebar - Chat History, Persona Selector, Single Document Uploader & Controls
 with st.sidebar:
@@ -504,6 +510,11 @@ with st.sidebar:
         st.rerun()
 
 # 6. Main Chat Interface
+if not st.session_state.chats and st.session_state.user_email:
+    new_id = create_new_chat(st.session_state.user_email)
+    st.session_state.chats = load_chats(st.session_state.user_email)
+    st.session_state.current_chat_id = new_id
+
 current_chat = next((c for c in st.session_state.chats if c["id"] == st.session_state.current_chat_id), None)
 if not current_chat and st.session_state.chats:
     current_chat = st.session_state.chats[0]
@@ -513,9 +524,9 @@ if current_chat and len(current_chat["messages"]) == 0:
     st.markdown(f"<h1 style='text-align: center; margin-top: 20vh;'>How can I help you, {user_name}!!</h1>", unsafe_allow_html=True)
 
 system_prompts = {
-    "General Companion": "You are Gyan, an intelligent multi-persona AI companion created by Roshan, a student of NIT Durgapur. IMPORTANT: Always format mathematical equations or scientific formulas using double dollar signs ($$...$$) for block equations and single dollar signs ($...$) for inline equations. Never use square brackets [...] for math.",
-    "Exam Prep Coach": "You are an expert Exam Prep Coach, helping students break down derivations, concepts, and study schedules clearly. You were created by Roshan, a student of NIT Durgapur. IMPORTANT: Always format mathematical equations or scientific formulas using double dollar signs ($$...$$) for block equations and single dollar signs ($...$) for inline equations. Never use square brackets [...] for math.",
-    "Strict Professor": "You are a strict, academic professor who demands rigorous precision and high standards. You were created by Roshan, a student of NIT Durgapur. IMPORTANT: Always format mathematical equations or scientific formulas using double dollar signs ($$...$$) for block equations and single dollar signs ($...$) for inline equations. Never use square brackets [...] for math.",
+    "General Companion": "You are Gyan, an intelligent multi-persona AI companion created by Roshan, a student of NIT Durgapur. STRICT FORMATTING RULE: Never use parentheses (...) or square brackets [...] for mathematical variables, numbers, or equations. Always use single dollar signs ($...$) for inline math and double dollar signs ($$...$$) for block/standalone equations.",
+    "Exam Prep Coach": "You are an expert Exam Prep Coach, helping students break down derivations, concepts, and study schedules clearly. You were created by Roshan, a student of NIT Durgapur. STRICT FORMATTING RULE: Never use parentheses (...) or square brackets [...] for mathematical variables, numbers, or equations. Always use single dollar signs ($...$) for inline math and double dollar signs ($$...$$) for block/standalone equations.",
+    "Strict Professor": "You are a strict, academic professor who demands rigorous precision and high standards. You were created by Roshan, a student of NIT Durgapur. STRICT FORMATTING RULE: Never use parentheses (...) or square brackets [...] for mathematical variables, numbers, or equations. Always use single dollar signs ($...$) for inline math and double dollar signs ($$...$$) for block/standalone equations.",
     "Senior Tech Lead": "You are a pragmatic Senior Tech Lead providing clean code architecture and debugging guidance. You were created by Roshan, a student of NIT Durgapur.",
     "Data Science Mentor": "You are a Data Science Mentor explaining machine learning algorithms, Python, and data pipelines. You were created by Roshan, a student of NIT Durgapur.",
     "Creative Director": "You are a Creative Director focusing on design principles, typography, and visual aesthetics. You were created by Roshan, a student of NIT Durgapur.",
@@ -532,70 +543,71 @@ if prompt := st.chat_input("Ask anything or query your uploaded document..."):
         st.error("Groq API key is missing! Check your secrets.toml file.")
         st.stop()
 
-    current_chat["messages"].append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
+    if current_chat:
+        current_chat["messages"].append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
 
-    scroll_to_bottom()
+        scroll_to_bottom()
 
-    if current_chat["title"] == "New Conversation":
-        try:
-            client_temp = Groq(api_key=groq_api_key)
-            title_res = client_temp.chat.completions.create(
-                model="openai/gpt-oss-20b",
-                messages=[
-                    {"role": "system", "content": "Generate a short title (max 4 words) summarizing this query. No quotes, no punctuation."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=15
-            )
-            gen_title = title_res.choices[0].message.content.strip()
-            current_chat["title"] = gen_title if gen_title else (prompt[:25] + "...")
-        except Exception:
-            current_chat["title"] = prompt[:25] + "..." if len(prompt) > 25 else prompt
+        if current_chat["title"] == "New Conversation":
+            try:
+                client_temp = Groq(api_key=groq_api_key)
+                title_res = client_temp.chat.completions.create(
+                    model="openai/gpt-oss-20b",
+                    messages=[
+                        {"role": "system", "content": "Generate a short title (max 4 words) summarizing this query. No quotes, no punctuation."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    max_tokens=15
+                )
+                gen_title = title_res.choices[0].message.content.strip()
+                current_chat["title"] = gen_title if gen_title else (prompt[:25] + "...")
+            except Exception:
+                current_chat["title"] = prompt[:25] + "..." if len(prompt) > 25 else prompt
 
-    with st.chat_message("assistant"):
-        message_placeholder = st.empty()
-        full_response = ""
-        
-        try:
-            client = Groq(api_key=groq_api_key)
-            base_system_prompt = system_prompts.get(persona, system_prompts["General Companion"])
+        with st.chat_message("assistant"):
+            message_placeholder = st.empty()
+            full_response = ""
             
-            rag_context = ""
-            if current_chat.get("document"):
-                rag_context = retrieve_relevant_chunks(prompt, current_chat["document"], top_k=6)
-            
-            if rag_context:
-                final_system_content = f"{base_system_prompt}\n\n[CONTEXT KNOWLEDGE BASE]\nUse the following extracted document text to answer the user's question accurately and thoroughly:\n{rag_context}"
-            else:
-                final_system_content = base_system_prompt
+            try:
+                client = Groq(api_key=groq_api_key)
+                base_system_prompt = system_prompts.get(persona, system_prompts["General Companion"])
+                
+                rag_context = ""
+                if current_chat.get("document"):
+                    rag_context = retrieve_relevant_chunks(prompt, current_chat["document"], top_k=6)
+                
+                if rag_context:
+                    final_system_content = f"{base_system_prompt}\n\n[CONTEXT KNOWLEDGE BASE]\nUse the following extracted document text to answer the user's question accurately and thoroughly:\n{rag_context}"
+                else:
+                    final_system_content = base_system_prompt
 
-            formatted_messages = [{"role": "system", "content": final_system_content}]
-            for m in current_chat["messages"]:
-                formatted_messages.append({"role": m["role"], "content": m["content"]})
+                formatted_messages = [{"role": "system", "content": final_system_content}]
+                for m in current_chat["messages"]:
+                    formatted_messages.append({"role": m["role"], "content": m["content"]})
 
-            stream = client.chat.completions.create(
-                model="openai/gpt-oss-20b",
-                messages=formatted_messages,
-                temperature=0.5,
-                max_tokens=2048,
-                stream=True
-            )
-            
-            for chunk in stream:
-                if chunk.choices and chunk.choices[0].delta.content is not None:
-                    full_response += chunk.choices[0].delta.content
-                    display_text = full_response.lstrip(" .<br>•\n")
-                    message_placeholder.markdown(display_text + "▌")
-            
-            full_response = full_response.lstrip(" .<br>•\n")
-            message_placeholder.markdown(full_response)
-            
-        except Exception as e:
-            full_response = f"AI Error: {str(e)}"
-            message_placeholder.markdown(full_response)
+                stream = client.chat.completions.create(
+                    model="openai/gpt-oss-20b",
+                    messages=formatted_messages,
+                    temperature=0.5,
+                    max_tokens=2048,
+                    stream=True
+                )
+                
+                for chunk in stream:
+                    if chunk.choices and chunk.choices[0].delta.content is not None:
+                        full_response += chunk.choices[0].delta.content
+                        display_text = full_response.lstrip(" .<br>•\n")
+                        message_placeholder.markdown(display_text + "▌")
+                
+                full_response = full_response.lstrip(" .<br>•\n")
+                message_placeholder.markdown(full_response)
+                
+            except Exception as e:
+                full_response = f"AI Error: {str(e)}"
+                message_placeholder.markdown(full_response)
 
-    current_chat["messages"].append({"role": "assistant", "content": full_response})
-    save_chat_to_db(st.session_state.user_email, current_chat["id"], current_chat["title"], current_chat["messages"], current_chat["document"])
-    scroll_to_bottom()
+        current_chat["messages"].append({"role": "assistant", "content": full_response})
+        save_chat_to_db(st.session_state.user_email, current_chat["id"], current_chat["title"], current_chat["messages"], current_chat["document"])
+        scroll_to_bottom()

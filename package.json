@@ -9,6 +9,7 @@
     "init-db": "node scripts/init-db.mjs"
   },
   "dependencies": {
+    "@vercel/analytics": "^2.0.1",
     "bcryptjs": "^2.4.3",
     "groq-sdk": "^0.7.0",
     "jose": "^5.9.6",
